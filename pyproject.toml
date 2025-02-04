@@ -1,0 +1,16 @@
+[project]
+name = "tinylang"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "ipykernel>=6.29.5",
+    "matplotlib>=3.10.0",
+    "numpy>=2.2.2",
+    "plotnine>=0.14.5",
+    "scikit-learn>=1.6.1",
+    "torch>=2.6.0",
+    "tqdm>=4.67.1",
+    "transformers>=4.48.2",
+]
