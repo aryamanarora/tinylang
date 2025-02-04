@@ -32,10 +32,13 @@ class Language:
 
         # each noun has a preference over theta roles it takes (object or recipient)
         # maybe this should be sparser?
-        # self.p_noun_given_class = np.random.dirichlet(np.ones(num_nouns), size=2)
-        self.p_noun_given_class = np.zeros((2, num_nouns))
-        self.p_noun_given_class[0, :num_nouns // 2] = 1.0 / (num_nouns // 2)
-        self.p_noun_given_class[1, num_nouns // 2:] = 1.0 / (num_nouns // 2 + num_nouns % 2)
+        self.p_noun_given_class = np.random.dirichlet(np.ones(num_nouns), size=2) # (2, num_nouns)
+        # self.p_noun_given_class = np.zeros((2, num_nouns))
+        # self.p_noun_given_class[0, :num_nouns // 2] = 1.0 / (num_nouns // 2)
+        # self.p_noun_given_class[1, num_nouns // 2:] = 1.0 / (num_nouns // 2 + num_nouns % 2)
+
+        self.p_class_given_noun = self.p_noun_given_class.T.copy() # (num_nouns, 2)
+        self.p_class_given_noun /= self.p_class_given_noun.sum(axis=1, keepdims=True)
 
         # each verb has an order preference over theta roles (obj recip or recip obj)
         self.p_order_given_verb = np.random.dirichlet(np.ones(2), size=num_verbs)
