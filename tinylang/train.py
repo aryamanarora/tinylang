@@ -1,6 +1,6 @@
 from torch.optim import AdamW
 from transformers import GPT2LMHeadModel, GPT2Config, AutoModel
-from tinylang.language import PCFG, QueryType
+from .language import PCFG, QueryType
 import torch
 from tqdm import tqdm
 import numpy as np
