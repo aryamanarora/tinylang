@@ -117,6 +117,8 @@ class PCFG(Language):
     def sample(self):
         """Generate a document from the PCFG, i.e. a sentence, a query, and a response."""
         sentence = self._sample()
+        while len(sentence) <= 1:
+            sentence = self._sample()
 
         # queries are only parent, child #n, and sibling #n
         # we uniformly sample the item we want to ask the query about, and then sample the query type
