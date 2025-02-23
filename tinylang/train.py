@@ -59,6 +59,7 @@ def eval_metrics(model: AutoModel, eval_inputs: torch.Tensor, eval_labels: torch
 def train(
     model: AutoModel,
     pcfg: PCFG,
+    eval_dataset: tuple[torch.Tensor, torch.Tensor]=None,
     batch_size: int = 16,
     num_steps: int = 10000,
 ):
@@ -68,9 +69,12 @@ def train(
     optimizer = AdamW(model.parameters(), lr=1e-4)
 
     # load eval dataset
-    eval_inputs, eval_labels = pcfg.sample_n(64)
-    eval_inputs = torch.tensor(eval_inputs, device=model.device, dtype=torch.long)
-    eval_labels = torch.tensor(eval_labels, device=model.device, dtype=torch.long)
+    if eval_dataset is None:
+        eval_inputs, eval_labels = pcfg.sample_n(64)
+        eval_inputs = torch.tensor(eval_inputs, device=model.device, dtype=torch.long)
+        eval_labels = torch.tensor(eval_labels, device=model.device, dtype=torch.long)
+    else:
+        eval_inputs, eval_labels = eval_dataset
 
     iterator = tqdm(range(num_steps), desc="Training")
     metrics = defaultdict(list)
