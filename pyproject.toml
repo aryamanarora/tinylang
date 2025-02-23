@@ -15,3 +15,7 @@ dependencies = [
     "tqdm>=4.67.1",
     "transformers>=4.48.2",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
