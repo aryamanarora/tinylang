@@ -2,7 +2,7 @@ model:
   class: "GPT2"
   config:
     n_positions: 1024
-    n_embd: 128 # n_inner is 4x by default
+    n_embd: 16 # n_inner is 4x by default
     n_layer: 3
     n_head: 2
 language:
@@ -18,11 +18,11 @@ language:
 evaluators:
   - class: "SummaryEvaluator"
     config:
-      run_every_n_steps: 100
+      run_every_n_steps: 500
 training:
   train_batch_size: 16
-  num_train_steps: 10000
+  num_train_steps: 100000
   eval_batch_size: 16
   num_eval_steps: 100
-  lr: 1e-4
-  log_dir: "experiments/logs/pcfg"
+  lr: 1e-3
+  log_dir: "experiments/logs/pcfg_3layer_2head_16dim"

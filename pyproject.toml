@@ -10,6 +10,7 @@ dependencies = [
     "notebook>=7.3.2",
     "numpy>=2.2.2",
     "plotnine>=0.14.5",
+    "pyarrow>=19.0.1",
     "pyyaml>=6.0.2",
     "scikit-learn>=1.6.1",
     "torch>=2.6.0",
