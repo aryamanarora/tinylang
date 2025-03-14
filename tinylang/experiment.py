@@ -9,7 +9,7 @@ import pandas as pd
 import plotnine as p9
 import numpy as np
 import random
-
+import shutil
 
 # fix all seeds
 torch.manual_seed(42)
@@ -98,7 +98,6 @@ class Experiment:
             eval_stats = self.eval_step(step)
             if eval_stats != {}:
                 all_eval_stats[step] = eval_stats
-                print(eval_stats)
 
             # optional save
             if self.training_config.save_every_n_steps is not None and step % self.training_config.save_every_n_steps == 0:
@@ -119,7 +118,8 @@ class Experiment:
         inputs = self.language.get_train_step(step=step, batch_size=self.training_config.train_batch_size)
 
         # train step
-        logits, loss = self.model.step(inputs["input_ids"], inputs["labels"])
+        outputs = self.model.step(inputs["input_ids"], inputs["labels"])
+        loss = outputs["loss"]
 
         # update optimizer
         self.optimizer.zero_grad()
@@ -139,7 +139,8 @@ class Experiment:
                 all_eval_stats[str(evaluator)] = []
                 for eval_step in range(self.training_config.num_eval_steps):
                     inputs = self.language.get_eval_step(step=eval_step, batch_size=self.training_config.eval_batch_size)
-                    eval_stats = evaluator.eval(self.model, inputs)
+                    outputs = self.model.step(inputs["input_ids"], inputs["labels"])
+                    eval_stats = evaluator.eval(self.model, inputs, outputs)
                     all_eval_stats[str(evaluator)].append(eval_stats)
                 all_eval_stats[str(evaluator)] = evaluator.aggregate(all_eval_stats[str(evaluator)])
         return all_eval_stats
@@ -154,14 +155,14 @@ class Experiment:
             rows.append(eval_stats)
         df = pd.json_normalize(rows)
 
-        # plot each column in df
-        for col in df.columns:
-            if col == "step": continue
-            # make sure type is numeric
-            if not pd.api.types.is_numeric_dtype(df[col]):
-                continue
-            plot = p9.ggplot(df, p9.aes(x="step", y=col)) + p9.geom_line()
-            plot.save(os.path.join(self.training_config.log_dir, f"{col}.png"))
-        
+        for evaluator in self.evaluators:
+            # only include columns whose name starts with the evaluator name
+            df_subset = df[["step", *[col for col in df.columns if col.startswith(str(evaluator))]]]
+            df_subset = df_subset.dropna()
+
+            # remove the evaluator name from the column names
+            df_subset.columns = df_subset.columns.str.replace(f"{str(evaluator)}.", "")
+            plot = evaluator.plot(df_subset, log_dir=self.training_config.log_dir)
+
         # save the df as parquet
-        df.to_parquet(os.path.join(self.training_config.log_dir, "eval_stats.parquet"))
+        df.to_parquet(os.path.join(self.training_config.log_dir, f"{str(evaluator)}.parquet"))

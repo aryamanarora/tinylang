@@ -28,6 +28,8 @@ class GPT2(Model):
             layer_norm_epsilon=1e-5,
             initializer_range=0.02,
             summary_type="cls_index",
+            output_hidden_states=True,
+            output_attentions=True,
         )
         self.model = GPT2LMHeadModel(self.config).to(device)
 
@@ -45,7 +47,12 @@ class GPT2(Model):
             A tuple containing the logits and the loss
         """
         output = self.model(input_ids, labels=labels)
-        return output.logits, output.loss
+        return {
+            "logits": output.logits,
+            "loss": output.loss,
+            "hidden_states": output.hidden_states,
+            "attentions": output.attentions,
+        }
 
 
     def save(self, path: str):

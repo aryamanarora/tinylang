@@ -16,8 +16,8 @@ class SummaryEvaluator(Evaluator):
             "pred_prob": lambda x: np.mean(x).item(),
         }
 
-    def eval(self, model: Model, inputs: dict):
-        logits, loss = model.step(inputs["input_ids"], inputs["labels"])
+    def eval(self, model: Model, inputs: dict, outputs: dict):
+        loss, logits = outputs["loss"], outputs["logits"]
         result = {"loss": loss.item()}
 
         # compute kl divs

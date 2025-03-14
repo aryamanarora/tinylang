@@ -3,6 +3,9 @@ from tinylang.model import Model
 import torch
 import importlib
 from typing import Any
+import pandas as pd
+import plotnine as p9
+import os
 
 def flatten_list(inputs: list[list[Any]]) -> list[Any]:
     if not isinstance(inputs[0], list):
@@ -38,7 +41,7 @@ class Evaluator(ABC):
         return evaluator
     
     @abstractmethod
-    def eval(self, model: Model, inputs: dict):
+    def eval(self, model: Model, inputs: dict, outputs: dict):
         pass
 
     def aggregate(self, stats: list[dict]):
@@ -47,3 +50,12 @@ class Evaluator(ABC):
             for k in stats[0]
         }
         return result
+
+    def plot(self, df: pd.DataFrame, log_dir: str):
+        """Default plot method for all evaluators."""
+        for col in df.columns:
+            # make sure type is numeric
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                continue
+            plot = p9.ggplot(df, p9.aes(x="step", y=col)) + p9.geom_line()
+            plot.save(os.path.join(log_dir, f"{str(self)}.{col}.png"))
