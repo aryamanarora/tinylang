@@ -49,3 +49,14 @@ class Language(ABC):
             A dict containing any data to be used for eval
         """
         pass
+
+
+    @abstractmethod
+    def save(self, path: str):
+        """Save the language to a file."""
+        pass
+
+    @classmethod
+    @abstractmethod
+    def load(cls, path: str):
+        """Load the language from a file."""

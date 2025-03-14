@@ -7,6 +7,15 @@ from collections import defaultdict
 import os
 import pandas as pd
 import plotnine as p9
+import numpy as np
+import random
+
+
+# fix all seeds
+torch.manual_seed(42)
+np.random.seed(42)
+random.seed(42)
+
 
 class TrainingConfig:
     def __init__(
@@ -99,8 +108,9 @@ class Experiment:
         # self.final_eval()
         self.make_plots(all_eval_stats)
 
-        # save model to log dir
+        # save model and language to log dir for reproducibility
         self.model.save(os.path.join(self.training_config.log_dir, "model.pt"))
+        self.language.save(os.path.join(self.training_config.log_dir, "language.pkl"))
     
 
     def train_step(self, step: int):

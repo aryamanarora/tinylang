@@ -3,7 +3,7 @@ from collections import namedtuple, defaultdict
 import numpy as np
 from enum import IntEnum
 import torch
-
+import pickle
 class QueryType(IntEnum):
     PARENT = 0
     CHILD = 1
@@ -224,3 +224,15 @@ class PCFG(Language):
     def get_eval_step(self, step: int, batch_size: int) -> dict:
         """Get an eval step."""
         return self.eval_set[step]
+    
+
+    def save(self, path: str):
+        """Save the PCFG to a file."""
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, path: str):
+        """Load the PCFG from a file."""
+        with open(path, "rb") as f:
+            return pickle.load(f)
