@@ -1,0 +1,31 @@
+model:
+  class: "GPT2"
+  config:
+    n_positions: 1024
+    n_embd: 16 # n_inner is 4x by default
+    n_layer: 8
+    n_head: 2
+language:
+  class: "PCFG"
+  config:
+    num_terminals: 20
+    num_nonterminals: 10
+    max_rhs_len: 10
+    max_rules_per_nt: 5
+    max_depth: 10
+    head_position: "left"
+    mask_nonquery: False
+evaluators:
+  - class: "SummaryEvaluator"
+    config:
+      run_every_n_steps: 500
+  - class: "AttentionEvaluator"
+    config:
+      run_every_n_steps: 500
+training:
+  train_batch_size: 16
+  num_train_steps: 10000
+  eval_batch_size: 16
+  num_eval_steps: 100
+  lr: 1e-3
+  log_dir: "experiments/logs/pcfg_8layer_2head_16dim"

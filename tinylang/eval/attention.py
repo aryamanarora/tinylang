@@ -38,12 +38,9 @@ class AttentionEvaluator(Evaluator):
 
     def plot(self, df: pd.DataFrame, log_dir: str):
         """Plot the attention scores."""
-        # print df
-        df = df.melt(id_vars=["step"])
-        print(df.head())
-        input()
 
         # split the column name into layer, head, type, token
+        df = df.melt(id_vars=["step"])
         df["layer"] = df["variable"].str.split(".").str[0]
         df["head"] = df["variable"].str.split(".").str[1]
         df["type"] = df["variable"].str.split(".").str[2]

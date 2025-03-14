@@ -165,4 +165,4 @@ class Experiment:
             plot = evaluator.plot(df_subset, log_dir=self.training_config.log_dir)
 
         # save the df as parquet
-        df.to_parquet(os.path.join(self.training_config.log_dir, f"{str(evaluator)}.parquet"))
+        df.to_parquet(os.path.join(self.training_config.log_dir, f"data.parquet"))
