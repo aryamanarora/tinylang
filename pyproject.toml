@@ -10,6 +10,7 @@ dependencies = [
     "notebook>=7.3.2",
     "numpy>=2.2.2",
     "plotnine>=0.14.5",
+    "pyyaml>=6.0.2",
     "scikit-learn>=1.6.1",
     "torch>=2.6.0",
     "tqdm>=4.67.1",
@@ -19,3 +20,9 @@ dependencies = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tinylang"]
+
+[project.scripts]
+tinylang = "tinylang.main:main"
