@@ -4,6 +4,13 @@ import numpy as np
 from enum import IntEnum
 import torch
 import pickle
+import termcolor
+import hashlib
+
+
+COLORS = ["red", "green", "blue", "yellow", "magenta", "cyan", "light_red", "light_green", "light_blue", "light_yellow", "light_magenta", "light_cyan"]
+
+
 class QueryType(IntEnum):
     PARENT = 0
     CHILD = 1
@@ -21,6 +28,7 @@ class PCFG(Language):
             max_depth: int,
             head_position: str="left",
             mask_nonquery: bool=False,
+            no_sibling_queries: bool=False,
         ):
         super().__init__()
         self.PAD = 0
@@ -49,6 +57,7 @@ class PCFG(Language):
         self.max_depth = max_depth
         self.head_position = head_position
         self.mask_nonquery = mask_nonquery
+        self.no_sibling_queries = no_sibling_queries
 
         # make the terminals and nonterminals
         self.terminals = [f"t{i}" for i in range(num_terminals)]
@@ -90,8 +99,31 @@ class PCFG(Language):
         # we ignore train steps since we are generating on the fly
         self.eval_set = []
         for _ in range(num_eval_steps):
-            self.eval_set.append(self.get_train_step(step=0, batch_size=eval_batch_size))
+            self.eval_set.append(self.get_train_step(step=0, batch_size=eval_batch_size, verbose=True))
+
     
+    def prettify(self, toks: list[int], probing_schema: dict | None = None) -> str:
+        """Prettify a tokenized sentence."""
+        if probing_schema is None:
+            return " ".join([self.id_to_token[int(tok)] for tok in toks])
+        else:
+            query_toks = [self.id_to_token[int(tok)] for tok in toks]
+            key_toks = [self.id_to_token[int(tok)] for tok in toks]
+            query_result, key_result = "", ""
+            for i, query in enumerate(probing_schema["queries"]):
+                # choose color based on query, suitable for terminal colors
+                color = COLORS[i % len(COLORS)]
+                pos = probing_schema["queries"][query]["pos"]
+                query_toks[pos] = termcolor.colored(query_toks[pos], color)
+                query_result += termcolor.colored(query, color) + "\n"
+            query_result = " ".join(query_toks) + "\n" + query_result
+            for i, key in enumerate([k for k in probing_schema["keys"] if k[0] != "_"]):
+                color = COLORS[i % len(COLORS)]
+                for pos in probing_schema["keys"][key]:
+                    key_toks[pos] = termcolor.colored(key_toks[pos], color)
+                key_result += termcolor.colored(key, color) + "\n"
+            key_result = " ".join(key_toks) + "\n" + key_result
+            return query_result, key_result
 
     def _sample(self):
         """Generate a random sentence from the PCFG."""
@@ -131,7 +163,7 @@ class PCFG(Language):
     def sample(self):
         """Generate a document from the PCFG, i.e. a sentence, a query, and a response."""
         sentence = self._sample()
-        while len(sentence) <= 1:
+        while len(sentence) <= 3:
             sentence = self._sample()
 
         # queries are only parent, child #n, and sibling #n
@@ -142,6 +174,7 @@ class PCFG(Language):
         # TODO: this code is so sus, how do we handle path length > 1 (we will have to eventually)
 
         # pick a random item to query
+        tokens = [self.BOS] + [int(x.label[1:]) + self.TERMINAL_START for x in sentence]
         query_item = np.random.randint(0, len(sentence))
         query_item_pos = 1 + query_item
 
@@ -149,8 +182,14 @@ class PCFG(Language):
         possible_queries_and_targets = {
             QueryType.PARENT: [i for i in range(len(sentence)) if sentence[i].id == sentence[query_item].head_id],
             QueryType.CHILD: [i for i in range(len(sentence)) if sentence[i].head_id == sentence[query_item].id],
-            QueryType.SIBLING: [i for i in range(len(sentence)) if sentence[i].head_id == sentence[query_item].head_id and sentence[i].id != sentence[query_item].id]
+            QueryType.SIBLING: [i for i in range(len(sentence)) if (sentence[i].head_id == sentence[query_item].head_id and i != query_item)] if not self.no_sibling_queries else []
         }
+        # print(self.prettify(tokens))
+        # print("    ", sentence[query_item])
+        # for k, v in possible_queries_and_targets.items():
+        #     print("    ", k.name, [sentence[i] for i in v])
+        # input()
+
         query_item = int(sentence[query_item].label[1:]) + self.TERMINAL_START
 
         # sample a query type
@@ -159,9 +198,11 @@ class PCFG(Language):
 
         # get the target distribution
         target_distribution = np.zeros(self.vocab_size)
+        all_target_pos = []
         for item in possible_queries_and_targets[query_type]:
             tok = int(sentence[item].label[1:]) + self.TERMINAL_START
             target_distribution[tok] += 1
+            all_target_pos.append(1 + item)
         target_distribution = target_distribution / np.sum(target_distribution)
 
         # sample a target item
@@ -171,30 +212,60 @@ class PCFG(Language):
 
         # generate the overall sequence to train on
         query = [query_item, query_type + self.QUERY_START, target_item]
-        tokens = [self.BOS] + [int(x.label[1:]) + self.TERMINAL_START for x in sentence] + [self.EOS] + query + [self.EOS]
+        tokens = tokens + [self.EOS] + query + [self.EOS]
 
         # generate probing schema
         probing_schema = {
             "type": QueryType(query_type).name,
-            "tokens": {
-                "query_item": len(tokens) - 1 - len(query),
-                "query_type": len(tokens) - 1 - len(query) + 1,
-                "target_item": len(tokens) - 1 - len(query) + 2,
-                "query_item_orig": query_item_pos,
-                "target_item_orig": target_item_pos,
+            "keys": {
+                "query_item": [len(tokens) - 1 - len(query)],
+                "query_type": [len(tokens) - 1 - len(query) + 1],
+                "target_item": [len(tokens) - 1 - len(query) + 2],
+                "_target_item_orig": [target_item_pos],
+                "query_item_orig": [query_item_pos],
+                "divider": [len(tokens) - 1 - len(query) - 1],
+                "_all_target_items_orig": all_target_pos,
+                "children": [1 + i for i in possible_queries_and_targets[QueryType.CHILD]],
+                "siblings": [1 + i for i in possible_queries_and_targets[QueryType.SIBLING]],
+                "parent": [1 + i for i in possible_queries_and_targets[QueryType.PARENT]],
+                "bos": [0],
             },
-            "target_distribution": torch.tensor(target_distribution),
-            "target_pos": len(tokens) - 1 - len(query) + 1,
+            "queries": {
+                "query_item": {
+                    "pos": len(tokens) - 1 - len(query),
+                    "target_distribution": None,
+                },
+                "query_type": {
+                    "pos": len(tokens) - 1 - len(query) + 1,
+                    "target_distribution": torch.tensor(target_distribution),
+                },
+                "target_item": {
+                    "pos": len(tokens) - 1 - len(query) + 2,
+                    "target_distribution": None,
+                },
+                "query_item_orig": {
+                    "pos": query_item_pos,
+                    "target_distribution": None,
+                },
+                "divider": {
+                    "pos": len(tokens) - 1 - len(query) - 1,
+                    "target_distribution": None,
+                },
+                "target_item_orig": {
+                    "pos": target_item_pos,
+                    "target_distribution": None,
+                },
+            }
         }
         
         return tokens, probing_schema
     
-    def get_train_step(self, step: int, batch_size: int) -> dict:
+    def get_train_step(self, step: int, batch_size: int, verbose: bool = False) -> dict:
         tokens, strs, probing_schemas = [], [], []
         for _ in range(batch_size):
             toks, probing_schema = self.sample()
             tokens.append(torch.tensor(toks))
-            strs.append(" ".join([self.id_to_token[int(tok)] for tok in toks]))
+            strs.append(self.prettify(toks))
             probing_schemas.append(probing_schema)
 
         # pad with self.PAD to max sequence length and stack with numpy
@@ -217,6 +288,7 @@ class PCFG(Language):
             "input_ids": tokens_padded,
             "labels": labels,
             "strs": strs,
+            "strs_pretty": [self.prettify(toks, probing_schema) for toks, probing_schema in zip(tokens, probing_schemas)] if verbose else None,
             "probing_schemas": probing_schemas,
         }
 

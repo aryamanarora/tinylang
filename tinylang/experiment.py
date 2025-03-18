@@ -133,36 +133,25 @@ class Experiment:
     @torch.no_grad()
     def eval_step(self, step: int):
         """Run all evaluators."""
-        all_eval_stats = {}
         for evaluator in self.evaluators:
             if step % evaluator.run_every_n_steps == 0:
-                all_eval_stats[str(evaluator)] = []
                 for eval_step in range(self.training_config.num_eval_steps):
                     inputs = self.language.get_eval_step(step=eval_step, batch_size=self.training_config.eval_batch_size)
                     outputs = self.model.step(inputs["input_ids"], inputs["labels"])
-                    eval_stats = evaluator.eval(self.model, inputs, outputs)
-                    all_eval_stats[str(evaluator)].append(eval_stats)
-                all_eval_stats[str(evaluator)] = evaluator.aggregate(all_eval_stats[str(evaluator)])
-        return all_eval_stats
+                    evaluator.eval(self.model, inputs, outputs, step=step)
 
 
     def make_plots(self, all_eval_stats: dict[int, dict]):
         """Make plots of the evaluation stats."""
-        
-        rows = []
-        for step, eval_stats in all_eval_stats.items():
-            eval_stats["step"] = step
-            rows.append(eval_stats)
-        df = pd.json_normalize(rows)
 
         for evaluator in self.evaluators:
-            # only include columns whose name starts with the evaluator name
-            df_subset = df[["step", *[col for col in df.columns if col.startswith(str(evaluator))]]]
-            df_subset = df_subset.dropna()
+            evaluator.prepare_plot()
+            evaluator.plot(log_dir=self.training_config.log_dir)
 
-            # remove the evaluator name from the column names
-            df_subset.columns = df_subset.columns.str.replace(f"{str(evaluator)}.", "")
-            plot = evaluator.plot(df_subset, log_dir=self.training_config.log_dir)
+            # # **unmelt** df
+            # df = evaluator.df
+            # df = df.groupby(["step", "variable"]).mean().reset_index()
+            # df = df.pivot(index="step", columns="variable", values="value")
 
-        # save the df as parquet
-        df.to_parquet(os.path.join(self.training_config.log_dir, f"data.parquet"))
+            # # save the df as parquet
+            # df.to_parquet(os.path.join(self.training_config.log_dir, f"data.parquet"))

@@ -6,7 +6,7 @@ from typing import Any
 import pandas as pd
 import plotnine as p9
 import os
-
+from collections import defaultdict
 def flatten_list(inputs: list[list[Any]]) -> list[Any]:
     if not isinstance(inputs[0], list):
         return inputs
@@ -19,6 +19,7 @@ class Evaluator(ABC):
         run_every_n_steps: int,
     ):
         self.run_every_n_steps = run_every_n_steps
+        self.all_eval_stats = defaultdict(lambda: defaultdict(list))
         self.agg_funcs = {}
 
     @abstractmethod
@@ -41,21 +42,34 @@ class Evaluator(ABC):
         return evaluator
     
     @abstractmethod
-    def eval(self, model: Model, inputs: dict, outputs: dict):
+    def eval(self, model: Model, inputs: dict, outputs: dict, step: int):
         pass
 
-    def aggregate(self, stats: list[dict]):
-        result = {
-            k: self.agg_funcs[k.split(".")[-1]](flatten_list([stat.get(k, []) for stat in stats]))
-            for k in stats[0]
-        }
-        return result
+    def get_agg_func(self, stat: str):
+        return self.agg_funcs[stat.split(".")[-1]]
+    
+    def prepare_plot(self):
+        rows = []
+        for step, stats in self.all_eval_stats.items():
+            for k, v in stats.items():
+                if isinstance(v, list):
+                    for val in v:
+                        rows.append({"variable": k, "value": val, "step": step})
+                else:
+                    rows.append({"variable": k, "value": v, "step": step})
+        self.df = pd.DataFrame(rows)
 
-    def plot(self, df: pd.DataFrame, log_dir: str):
+    def plot(self, log_dir: str):
         """Default plot method for all evaluators."""
-        for col in df.columns:
+        assert self.df is not None, "Please call prepare_plot() first"
+        df = self.df
+        for col in df["variable"].unique():
             # make sure type is numeric
-            if not pd.api.types.is_numeric_dtype(df[col]):
+            if col == "step":
                 continue
-            plot = p9.ggplot(df, p9.aes(x="step", y=col)) + p9.geom_line()
+            df_subset = df[df["variable"] == col].drop(columns=["variable"])
+            if not pd.api.types.is_numeric_dtype(df_subset["value"]):
+                continue
+            df_subset = df_subset.dropna().groupby("step").mean().reset_index()
+            plot = p9.ggplot(df_subset, p9.aes(x="step", y="value")) + p9.geom_line()
             plot.save(os.path.join(log_dir, f"{str(self)}.{col}.png"))

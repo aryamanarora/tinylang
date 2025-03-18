@@ -8,11 +8,11 @@ model:
 language:
   class: "PCFG"
   config:
-    num_terminals: 20
-    num_nonterminals: 10
-    max_rhs_len: 10
-    max_rules_per_nt: 5
-    max_depth: 10
+    num_terminals: 50
+    num_nonterminals: 20
+    max_rhs_len: 5
+    max_rules_per_nt: 10
+    max_depth: 20
     head_position: "left"
     mask_nonquery: False
 evaluators:
@@ -27,5 +27,5 @@ training:
   num_train_steps: 10000
   eval_batch_size: 16
   num_eval_steps: 100
-  lr: 1e-4
-  log_dir: "experiments/logs/pcfg_3layer_2head_16dim"
+  lr: 1e-3
+  log_dir: "experiments/logs/bigpcfg_3layer_2head_16dim"
