@@ -12,3 +12,4 @@ wheels/
 
 # Logs
 experiments/logs/*
+*.out

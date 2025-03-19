@@ -87,12 +87,13 @@ class Experiment:
 
     def train(self):
         """Main training loop."""
-        iterator = tqdm(range(self.training_config.num_train_steps), desc="Training")
+        iterator = tqdm(range(self.training_config.num_train_steps + 1), desc="Training")
         all_eval_stats = defaultdict(list)
         for step in iterator:
             # one train step
-            train_loss = self.train_step(step)
-            iterator.set_postfix(loss=train_loss)
+            if step != self.training_config.num_train_steps:
+                train_loss = self.train_step(step)
+                iterator.set_postfix(loss=train_loss)
 
             # one eval step
             eval_stats = self.eval_step(step)
