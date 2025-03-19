@@ -38,9 +38,9 @@ class ProbeEvaluator(Evaluator):
 
     @ignore_warnings(category=Warning)
     def post_eval(self, step: int):
-        for subset in tqdm(self.activations[step]):
-            activations = torch.stack(self.activations[step][subset])
-            labels = torch.tensor(self.labels[step][subset])
+        for subset in self.activations[step]:
+            activations = torch.stack(self.activations[step][subset]).cpu()
+            labels = torch.tensor(self.labels[step][subset]).cpu()
 
             # first half is train set
             train_len = len(activations) // 2
@@ -50,7 +50,8 @@ class ProbeEvaluator(Evaluator):
                             
             # get eval set accuracy
             preds = lr.predict(activations[train_len:])
-            acc = (preds == labels[train_len:]).sum() / len(preds)
+            acc = ((preds == labels[train_len:]).sum() / len(preds)).item()
+            print(f"{subset:>40}: {acc:.4%}")
             self.all_eval_stats[step][f"{subset}.acc"].append(acc)
 
 
@@ -72,5 +73,5 @@ class ProbeEvaluator(Evaluator):
                 + p9.geom_line()
                 + p9.facet_grid("label_type~layer")
             )
-            plot.save(f"{log_dir}/{type}.png")
+            plot.save(f"{log_dir}/{str(self)}.{type}.png")
             

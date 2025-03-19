@@ -24,7 +24,7 @@ evaluators:
       run_every_n_steps: 500
   - class: "ProbeEvaluator"
     config:
-      run_every_n_steps: 500
+      run_every_n_steps: 5000
 training:
   train_batch_size: 16
   num_train_steps: 10000

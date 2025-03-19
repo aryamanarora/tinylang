@@ -5,10 +5,10 @@ from enum import IntEnum
 import torch
 import pickle
 import termcolor
-import hashlib
 
 
 COLORS = ["red", "green", "blue", "yellow", "magenta", "cyan", "light_red", "light_green", "light_blue", "light_yellow", "light_magenta", "light_cyan"]
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class QueryType(IntEnum):
@@ -275,8 +275,8 @@ class PCFG(Language):
         # this is probably inefficient af
         # labels replace PAD with -100
         max_len = max(len(t) for t in tokens)
-        tokens_padded = torch.nn.utils.rnn.pad_sequence(tokens, batch_first=True, padding_value=self.PAD)
-        labels = tokens_padded.clone()
+        tokens_padded = torch.nn.utils.rnn.pad_sequence(tokens, batch_first=True, padding_value=self.PAD).to(DEVICE)
+        labels = tokens_padded.clone().to(DEVICE)
         labels[labels == self.PAD] = -100
 
         if self.mask_nonquery:

@@ -26,7 +26,7 @@ class SummaryEvaluator(Evaluator):
                 target_pos = info["pos"]
                 target_val = inputs["labels"][i][target_pos + 1]
                 pred_logits = logits[i, target_pos]
-                pred_probs = torch.nn.functional.log_softmax(pred_logits, dim=-1)
+                pred_probs = torch.nn.functional.log_softmax(pred_logits, dim=-1).to("cpu")
                 kl_divs = torch.nn.functional.kl_div(pred_probs, true_probs, reduction="none", log_target=False).sum(dim=-1)
                 self.all_eval_stats[step][f"{type}.{q}.kl_div"].append(kl_divs.item())
                 self.all_eval_stats[step][f"{q}.kl_div"].append(kl_divs.item())
