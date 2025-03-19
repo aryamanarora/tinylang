@@ -139,6 +139,7 @@ class Experiment:
                     inputs = self.language.get_eval_step(step=eval_step, batch_size=self.training_config.eval_batch_size)
                     outputs = self.model.step(inputs["input_ids"], inputs["labels"])
                     evaluator.eval(self.model, inputs, outputs, step=step)
+                evaluator.post_eval(step=step)
 
 
     def make_plots(self, all_eval_stats: dict[int, dict]):

@@ -73,3 +73,6 @@ class Evaluator(ABC):
             df_subset = df_subset.dropna().groupby("step").mean().reset_index()
             plot = p9.ggplot(df_subset, p9.aes(x="step", y="value")) + p9.geom_line()
             plot.save(os.path.join(log_dir, f"{str(self)}.{col}.png"))
+    
+    def post_eval(self, step: int):
+        pass

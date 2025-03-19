@@ -255,6 +255,9 @@ class PCFG(Language):
                     "pos": target_item_pos,
                     "target_distribution": None,
                 },
+            },
+            "target_distributions": {
+                "target_item": int(self.id_to_token[target_item][1:]),
             }
         }
         
