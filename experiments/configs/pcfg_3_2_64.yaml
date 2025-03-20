@@ -21,14 +21,13 @@ evaluators:
       run_every_n_steps: 100
   - class: "AttentionEvaluator"
     config:
-      run_every_n_steps: 500
+      run_every_n_steps: 5000
   - class: "ProbeEvaluator"
     config:
       run_every_n_steps: 5000
 training:
   train_batch_size: 16
-  num_train_steps: 10000
+  num_train_steps: 50000
   eval_batch_size: 16
   num_eval_steps: 100
-  lr: 1e-4
-  log_dir: "experiments/logs/pcfg_3layer_2head_64dim"
+  lr: 25e-5

@@ -2,9 +2,9 @@ model:
   class: "GPT2"
   config:
     n_positions: 1024
-    n_embd: 128 # n_inner is 4x by default
-    n_layer: 1
-    n_head: 1
+    n_embd: 64 # n_inner is 4x by default
+    n_layer: 3
+    n_head: 2
 language:
   class: "PCFG"
   config:
@@ -13,7 +13,7 @@ language:
     max_rhs_len: 10
     max_rules_per_nt: 5
     max_depth: 10
-    head_position: "left"
+    head_position: "right"
     mask_nonquery: False
 evaluators:
   - class: "SummaryEvaluator"
@@ -21,10 +21,13 @@ evaluators:
       run_every_n_steps: 100
   - class: "AttentionEvaluator"
     config:
-      run_every_n_steps: 100
+      run_every_n_steps: 5000
+  - class: "ProbeEvaluator"
+    config:
+      run_every_n_steps: 5000
 training:
   train_batch_size: 16
-  num_train_steps: 10000
+  num_train_steps: 50000
   eval_batch_size: 16
   num_eval_steps: 100
-  lr: 1e-3
+  lr: 25e-5

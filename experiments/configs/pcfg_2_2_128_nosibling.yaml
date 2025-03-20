@@ -29,4 +29,3 @@ training:
   eval_batch_size: 16
   num_eval_steps: 100
   lr: 1e-4
-  log_dir: "experiments/logs/pcfg_2layer_2head_128dim_nosibling"

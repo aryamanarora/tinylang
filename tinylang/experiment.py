@@ -150,10 +150,5 @@ class Experiment:
             evaluator.prepare_plot()
             evaluator.plot(log_dir=self.training_config.log_dir)
 
-            # # **unmelt** df
-            # df = evaluator.df
-            # df = df.groupby(["step", "variable"]).mean().reset_index()
-            # df = df.pivot(index="step", columns="variable", values="value")
-
-            # # save the df as parquet
-            # df.to_parquet(os.path.join(self.training_config.log_dir, f"data.parquet"))
+            # save the df as csv
+            evaluator.df.to_csv(os.path.join(self.training_config.log_dir, f"{str(evaluator)}.csv"), index=False)
