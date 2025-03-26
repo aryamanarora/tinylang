@@ -5,7 +5,20 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.utils._testing import ignore_warnings
 import plotnine as p9
 from collections import defaultdict
-from tqdm import tqdm
+import torch.nn as nn
+
+
+class MLPProbe(nn.Module):
+    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = torch.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
+
 
 class ProbeEvaluator(Evaluator):
     def __str__(self):
@@ -39,8 +52,8 @@ class ProbeEvaluator(Evaluator):
     @ignore_warnings(category=Warning)
     def post_eval(self, step: int):
         for subset in self.activations[step]:
-            activations = torch.stack(self.activations[step][subset]).cpu()
-            labels = torch.tensor(self.labels[step][subset]).cpu()
+            activations = torch.stack(self.activations[step][subset]).cpu() # shape: (n, d)
+            labels = torch.tensor(self.labels[step][subset]).cpu() # shape: (n,)
 
             # first half is train set
             train_len = len(activations) // 2
@@ -54,8 +67,27 @@ class ProbeEvaluator(Evaluator):
             print(f"{subset:>40}: {acc:.4%}")
             self.all_eval_stats[step][f"{subset}.acc"].append(acc)
 
+            # now do MLP probe
+            num_labels = max(labels) + 1
+            mlp = MLPProbe(activations.shape[1], activations.shape[1], num_labels)
+            optimizer = torch.optim.Adam(mlp.parameters(), lr=0.001)
+            for epoch in range(10):
+                for batch_idx in range(train_len // 10):
+                    batch_start, batch_end = batch_idx * 10, min((batch_idx + 1) * 10, train_len)
+                    optimizer.zero_grad()
+                    preds = mlp(activations[batch_start:batch_end])
+                    loss = nn.functional.cross_entropy(preds, labels[batch_start:batch_end])
+                    loss.backward()
+                    optimizer.step()
+            
+            # evaluate MLP probe
+            mlp.eval()
+            with torch.no_grad():
+                preds = mlp(activations[train_len:])
+                acc = ((preds.argmax(dim=1) == labels[train_len:]).sum() / len(preds)).item()
+                print(f"{subset:>40} (MLP): {acc:.4%}")
+                self.all_eval_stats[step][f"{subset}.mlp_acc"].append(acc)
 
-    
     def plot(self, log_dir: str):
         df = self.df
         df = df.groupby(["step", "variable"]).mean().reset_index()
@@ -63,15 +95,16 @@ class ProbeEvaluator(Evaluator):
         df["type"] = df["variable"].str.split(".").str[1]
         df["label_type"] = df["variable"].str.split(".").str[2]
         df["query"] = df["variable"].str.split(".").str[3]
-        df = df.drop(columns=["variable"])
 
         # make plot
         for type in df["type"].unique():
-            df_subset = df[df["type"] == type]
-            plot = (
-                p9.ggplot(df_subset, p9.aes(x="step", y="value", color="query"))
-                + p9.geom_line()
-                + p9.facet_grid("label_type~layer")
-            )
-            plot.save(f"{log_dir}/{str(self)}.{type}.png")
+            for variable in df["variable"].unique():
+                df_subset = df[df["type"] == type]
+                df_subset = df_subset[df_subset["variable"] == variable]
+                plot = (
+                    p9.ggplot(df_subset, p9.aes(x="step", y="value", color="query"))
+                    + p9.geom_line()
+                    + p9.facet_grid("label_type~layer")
+                )
+                plot.save(f"{log_dir}/{str(self)}.{type}.{variable}.png")
             

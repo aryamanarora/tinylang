@@ -146,14 +146,16 @@ class PCFG(Language):
                     if self.head_position == "left":
                         head = np.random.choice(len(self.terminals), p=self.head_probs[nt])
                         generated_new.append(Node(str(self.terminals[head]), this_head_id, head_id))
-                    else:
-                        raise NotImplementedError("Only right head position is implemented")
                     
                     # then sample the rhs
                     rhs = np.random.choice(len(self.rules[nt]), p=self.rule_probs[nt])
                     for child in self.rules[nt][rhs]:
                         generated_new.append(Node(str(child), next_id, this_head_id))
                         next_id += 1
+                        
+                    if self.head_position == "right":
+                        head = np.random.choice(len(self.terminals), p=self.head_probs[nt])
+                        generated_new.append(Node(str(self.terminals[head]), this_head_id, head_id))
 
             generated = generated_new
             done = done_new
