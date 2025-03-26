@@ -3,6 +3,7 @@ from tinylang.model import Model
 import numpy as np
 import torch
 from collections import defaultdict
+from tinylang.language import Language
 
 class SummaryEvaluator(Evaluator):
     def __str__(self):
@@ -11,7 +12,7 @@ class SummaryEvaluator(Evaluator):
     def __init__(self, run_every_n_steps: int):
         super().__init__(run_every_n_steps)
 
-    def eval(self, model: Model, inputs: dict, outputs: dict, step: int):
+    def eval(self, model: Model, language: Language, inputs: dict, outputs: dict, step: int):
         loss, logits = outputs["loss"], outputs["logits"]
         self.all_eval_stats[step]["loss"] = loss.item()
 
