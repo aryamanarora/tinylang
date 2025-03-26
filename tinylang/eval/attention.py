@@ -1,5 +1,6 @@
 from .eval import Evaluator
 from tinylang.model import Model
+from tinylang.language import Language
 from collections import defaultdict
 import numpy as np
 import plotnine as p9
@@ -14,7 +15,7 @@ class AttentionEvaluator(Evaluator):
     def __init__(self, run_every_n_steps: int):
         super().__init__(run_every_n_steps)
 
-    def eval(self, model: Model, inputs: dict, outputs: dict, step: int):
+    def eval(self, model: Model, language: Language, inputs: dict, outputs: dict, step: int):
         probing_schemas = inputs["probing_schemas"]
         attentions = outputs["attentions"]
 

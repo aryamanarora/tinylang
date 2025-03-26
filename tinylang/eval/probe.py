@@ -3,9 +3,11 @@ from tinylang.model import Model
 import torch
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils._testing import ignore_warnings
+from tinylang.language import Language
 import plotnine as p9
 from collections import defaultdict
 import torch.nn as nn
+from tqdm import tqdm
 
 
 class MLPProbe(nn.Module):
@@ -29,7 +31,7 @@ class ProbeEvaluator(Evaluator):
         self.activations = defaultdict(lambda: defaultdict(list))
         self.labels = defaultdict(lambda: defaultdict(list))
 
-    def eval(self, model: Model, inputs: dict, outputs: dict, step: int):
+    def eval(self, model: Model, language: Language, inputs: dict, outputs: dict, step: int):
         probing_schemas = inputs["probing_schemas"]
         hidden_states = outputs["hidden_states"]
         types = set([x["type"] for x in probing_schemas])
@@ -52,8 +54,8 @@ class ProbeEvaluator(Evaluator):
     @ignore_warnings(category=Warning)
     def post_eval(self, step: int):
         for subset in self.activations[step]:
-            activations = torch.stack(self.activations[step][subset]).cpu() # shape: (n, d)
-            labels = torch.tensor(self.labels[step][subset]).cpu() # shape: (n,)
+            activations = torch.stack(self.activations[step][subset]).detach() # shape: (n, d)
+            labels = torch.tensor(self.labels[step][subset]).detach() # shape: (n,)
 
             # first half is train set
             train_len = len(activations) // 2
@@ -69,16 +71,17 @@ class ProbeEvaluator(Evaluator):
 
             # now do MLP probe
             num_labels = max(labels) + 1
-            mlp = MLPProbe(activations.shape[1], activations.shape[1], num_labels)
-            optimizer = torch.optim.Adam(mlp.parameters(), lr=0.001)
-            for epoch in range(10):
-                for batch_idx in range(train_len // 10):
-                    batch_start, batch_end = batch_idx * 10, min((batch_idx + 1) * 10, train_len)
-                    optimizer.zero_grad()
-                    preds = mlp(activations[batch_start:batch_end])
-                    loss = nn.functional.cross_entropy(preds, labels[batch_start:batch_end])
-                    loss.backward()
-                    optimizer.step()
+            mlp = MLPProbe(activations.shape[1], activations.shape[1] * 2, num_labels)
+            mlp.train()
+            optimizer = torch.optim.Adam(mlp.parameters(), lr=1e-2)
+            # iterator = tqdm(range(4000))
+            for _ in range(4000):
+                optimizer.zero_grad()
+                preds = mlp(activations[:train_len])
+                loss = nn.functional.cross_entropy(preds, labels[:train_len])
+                loss.backward()
+                # iterator.set_postfix({"loss": loss.item()})
+                optimizer.step()
             
             # evaluate MLP probe
             mlp.eval()

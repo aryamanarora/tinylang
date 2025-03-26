@@ -97,9 +97,11 @@ class PCFG(Language):
     def prepare_sets(self, train_batch_size: int, eval_batch_size: int, num_train_steps: int, num_eval_steps: int):
         """Prepare the train and eval sets."""
         # we ignore train steps since we are generating on the fly
-        self.eval_set = []
-        for _ in range(num_eval_steps):
-            self.eval_set.append(self.get_train_step(step=0, batch_size=eval_batch_size, verbose=True))
+        self.eval_toks, self.eval_probing_schemas = [], []
+        for _ in range(num_eval_steps * eval_batch_size):
+            tok, probing_schema = self.sample()
+            self.eval_toks.append(tok)
+            self.eval_probing_schemas.append(probing_schema)
 
     
     def prettify(self, toks: list[int], probing_schema: dict | None = None) -> str:
@@ -265,18 +267,13 @@ class PCFG(Language):
         
         return tokens, probing_schema
     
-    def get_train_step(self, step: int, batch_size: int, verbose: bool = False) -> dict:
-        tokens, strs, probing_schemas = [], [], []
-        for _ in range(batch_size):
-            toks, probing_schema = self.sample()
-            tokens.append(torch.tensor(toks))
-            strs.append(self.prettify(toks))
-            probing_schemas.append(probing_schema)
+    def batchify(self, toks: list[list], probing_schemas: list[dict], verbose: bool=False) -> dict:
+        tokens = [torch.tensor(tok) for tok in toks]
+        strs = [self.prettify(tok) for tok in toks]
 
         # pad with self.PAD to max sequence length and stack with numpy
         # this is probably inefficient af
         # labels replace PAD with -100
-        max_len = max(len(t) for t in tokens)
         tokens_padded = torch.nn.utils.rnn.pad_sequence(tokens, batch_first=True, padding_value=self.PAD).to(DEVICE)
         labels = tokens_padded.clone().to(DEVICE)
         labels[labels == self.PAD] = -100
@@ -289,18 +286,35 @@ class PCFG(Language):
                 labels[i, :query_token] = -100
                 labels[i, query_token + 1:] = -100
 
-        return {
+        ret = {
             "input_ids": tokens_padded,
             "labels": labels,
             "strs": strs,
-            "strs_pretty": [self.prettify(toks, probing_schema) for toks, probing_schema in zip(tokens, probing_schemas)] if verbose else None,
             "probing_schemas": probing_schemas,
         }
+        if verbose:
+            ret["strs_pretty"] = [self.prettify(toks, probing_schema) for toks, probing_schema in zip(tokens, probing_schemas)]
+        return ret
+
+    
+    def get_train_step(self, step: int, batch_size: int, verbose: bool = False) -> dict:
+        toks, probing_schemas = [], []
+        for _ in range(batch_size):
+            tok, probing_schema = self.sample()
+            toks.append(tok)
+            probing_schemas.append(probing_schema)
+
+        return self.batchify(toks, probing_schemas, verbose=verbose)
 
 
     def get_eval_step(self, step: int, batch_size: int) -> dict:
         """Get an eval step."""
-        return self.eval_set[step]
+        batch_start, batch_end = step * batch_size, min(len(self.eval_toks), (step + 1) * batch_size)
+        return self.batchify(
+            self.eval_toks[batch_start:batch_end],
+            self.eval_probing_schemas[batch_start:batch_end],
+            verbose=True,
+        )
     
 
     def save(self, path: str):

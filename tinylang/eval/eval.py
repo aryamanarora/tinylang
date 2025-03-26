@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from tinylang.model import Model
+from tinylang.language import Language
 import torch
 import importlib
 from typing import Any
@@ -20,7 +21,7 @@ class Evaluator(ABC):
     ):
         self.run_every_n_steps = run_every_n_steps
         self.all_eval_stats = defaultdict(lambda: defaultdict(list))
-        self.agg_funcs = {}
+        self.do_batching = True
 
     @abstractmethod
     def __str__(self):
@@ -42,11 +43,8 @@ class Evaluator(ABC):
         return evaluator
     
     @abstractmethod
-    def eval(self, model: Model, inputs: dict, outputs: dict, step: int):
+    def eval(self, model: Model, language: Language, inputs: dict, outputs: dict, step: int):
         pass
-
-    def get_agg_func(self, stat: str):
-        return self.agg_funcs[stat.split(".")[-1]]
     
     def prepare_plot(self):
         rows = []

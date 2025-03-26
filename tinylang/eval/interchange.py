@@ -1,0 +1,83 @@
+from .eval import Evaluator
+from tinylang.model import Model
+from tinylang.language import Language
+import torch
+import plotnine as p9
+from collections import defaultdict
+import torch.nn as nn
+import pyvene as pv
+import random
+import numpy as np
+
+
+class InterchangeEvaluator(Evaluator):
+    def __str__(self):
+        return "InterchangeEvaluator"
+
+    def __init__(self, run_every_n_steps: int):
+        super().__init__(run_every_n_steps)
+        self.do_batching = False
+
+    @torch.no_grad()
+    def eval(self, model: Model, language: Language, inputs: dict, outputs: dict, step: int):
+        probing_schemas = inputs["probing_schemas"]
+        hidden_states = outputs["hidden_states"]
+        types = set([x["type"] for x in probing_schemas])
+        
+
+        for layer in range(1, len(hidden_states)):
+            pv_config = pv.IntervenableConfig({
+                "layer": layer - 1,
+                "component": "value_output",
+            })
+            pv_gpt2 = pv.IntervenableModel(pv_config, model=model.model)
+            for t in types:
+                for label_type in probing_schemas[0]["target_distributions"]:
+                    for query in probing_schemas[0]["queries"]:
+                        for batch_idx in range(len(hidden_states[layer])):
+                            if t != probing_schemas[batch_idx]["type"]:
+                                continue
+                            query_pos = probing_schemas[batch_idx]["queries"][query]["pos"]
+                            target_item_orig_pos = probing_schemas[batch_idx]["queries"]["target_item_orig"]["pos"]
+                            target_item_pos = probing_schemas[batch_idx]["queries"]["target_item"]["pos"]
+                            input_ids = inputs["input_ids"][batch_idx]
+                            target_item_orig = input_ids[target_item_orig_pos]
+                            target_item_new = random.randint(language.TERMINAL_START, language.QUERY_START - 1)
+                            intervened_input_ids = input_ids.clone()
+                            intervened_input_ids[target_item_orig_pos] = target_item_new
+                            intervened_input_ids[target_item_pos] = target_item_orig
+                            _, intervened_outputs = pv_gpt2(
+                                base={"input_ids": input_ids.unsqueeze(0)},
+                                sources={"input_ids": intervened_input_ids.unsqueeze(0)},
+                                unit_locations={"sources->base": [query_pos]},
+                            )
+                            intervened_probs = torch.log_softmax(intervened_outputs["logits"].squeeze(0)[target_item_pos - 1], dim=-1)
+                            output_probs = torch.log_softmax(outputs["logits"][batch_idx][target_item_pos - 1], dim=-1)
+                            kl_div = torch.nn.functional.kl_div(intervened_probs, output_probs, log_target=True, reduction="batchmean").item()
+                            intervened_prob = intervened_probs.exp()[target_item_new]
+                            old_prob = output_probs.exp()[target_item_new]
+                            intervened_base_prob = intervened_probs.exp()[target_item_orig]
+                            old_base_prob = output_probs.exp()[target_item_orig]
+
+                            log_odds_ratio = old_base_prob.log() - intervened_base_prob.log() + intervened_prob.log() - old_prob.log()
+
+                            label = f"{t}.{label_type}.{query}.{layer - 1}"
+                            self.all_eval_stats[step][f"{label}.kl_div"].append(kl_div)
+                            self.all_eval_stats[step][f"{label}.prob_diff"].append((intervened_prob - old_prob).item())
+                            self.all_eval_stats[step][f"{label}.log_odds_ratio"].append(log_odds_ratio.item())
+
+            # deregister intervention
+            pv_gpt2._cleanup_states()
+                            
+
+
+    def post_eval(self, step: int):
+        for ending in ["kl_div", "prob_diff", "log_odds_ratio"]:
+            top = [(np.mean(v), k) for k, v in self.all_eval_stats[step].items() if k.endswith(ending)]
+            for v, k in sorted(top):
+                print(f"{k:>80}: {v:.12f}")
+            print('------')
+
+    def plot(self, log_dir: str):
+        pass
+            
