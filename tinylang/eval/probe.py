@@ -98,6 +98,7 @@ class ProbeEvaluator(Evaluator):
         df["type"] = df["variable"].str.split(".").str[1]
         df["label_type"] = df["variable"].str.split(".").str[2]
         df["query"] = df["variable"].str.split(".").str[3]
+        df["variable"] = df["variable"].str.split(".").str[4]
 
         # make plot
         for type in df["type"].unique():

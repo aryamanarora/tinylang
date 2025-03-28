@@ -18,7 +18,7 @@ def main():
     # Load config
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
-        config["training"]["log_dir"] = os.path.join(parent_dir, f"logs/{filename}")
+        config["training"]["log_dir"] = os.path.join(parent_dir, f"logs/{filename.split('.')[0]}")
     
     # Create and run experiment
     experiment = Experiment.from_config(config)
