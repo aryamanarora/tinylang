@@ -27,6 +27,7 @@ class TrainingConfig:
         lr: float | int | str,
         log_dir: str,
         save_every_n_steps: int | None = None,
+        verbose: bool = False,
     ):
         self.train_batch_size = train_batch_size
         self.eval_batch_size = eval_batch_size
@@ -35,6 +36,7 @@ class TrainingConfig:
         self.lr = float(lr)
         self.save_every_n_steps = save_every_n_steps
         self.log_dir = log_dir
+        self.verbose = verbose
 
 class Experiment:
     def __init__(
@@ -48,6 +50,7 @@ class Experiment:
         self.language = language
         self.evaluators = evaluators
         self.training_config = TrainingConfig(**training_config) if isinstance(training_config, dict) else training_config
+        self.verbose = self.training_config.verbose
 
         # set up optimizer and lr scheduler
         self.optimizer = torch.optim.AdamW(self.model.model.parameters(), lr=self.training_config.lr)
@@ -87,13 +90,14 @@ class Experiment:
 
     def train(self):
         """Main training loop."""
-        iterator = tqdm(range(self.training_config.num_train_steps + 1), desc="Training")
+        iterator = tqdm(range(self.training_config.num_train_steps + 1), desc="Training") if self.verbose else range(self.training_config.num_train_steps + 1)
         all_eval_stats = defaultdict(list)
         for step in iterator:
             # one train step
             if step != self.training_config.num_train_steps:
                 train_loss = self.train_step(step)
-                iterator.set_postfix(loss=train_loss)
+                if self.verbose:
+                    iterator.set_postfix(loss=train_loss)
 
             # one eval step
             eval_stats = self.eval_step(step)
@@ -134,7 +138,7 @@ class Experiment:
     def eval_step(self, step: int):
         """Run all evaluators."""
         # skip if step is not divisible by run_every_n_steps
-        if any(step % evaluator.run_every_n_steps != 0 for evaluator in self.evaluators):
+        if all(step % evaluator.run_every_n_steps != 0 for evaluator in self.evaluators):
             return
 
         # set model to eval
@@ -145,7 +149,7 @@ class Experiment:
             if step % evaluator.run_every_n_steps == 0:
                 eval_batch_size = self.training_config.eval_batch_size if evaluator.do_batching else self.training_config.num_eval_steps * self.training_config.eval_batch_size
                 eval_steps = self.training_config.num_eval_steps if evaluator.do_batching else 1
-                for eval_step in tqdm(range(eval_steps), desc=str(evaluator)):
+                for eval_step in (tqdm(range(eval_steps), desc=str(evaluator)) if self.verbose else range(eval_steps)):
                     inputs = self.language.get_eval_step(step=eval_step, batch_size=eval_batch_size)
                     outputs = self.model.step(inputs["input_ids"], inputs["labels"])
                     evaluator.eval(self.model, self.language, inputs, outputs, step=step)
