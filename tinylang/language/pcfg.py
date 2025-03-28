@@ -29,6 +29,7 @@ class PCFG(Language):
             head_position: str="left",
             mask_nonquery: bool=False,
             no_sibling_queries: bool=False,
+            no_child_queries: bool=False,
         ):
         super().__init__()
         self.PAD = 0
@@ -58,7 +59,8 @@ class PCFG(Language):
         self.head_position = head_position
         self.mask_nonquery = mask_nonquery
         self.no_sibling_queries = no_sibling_queries
-
+        self.no_child_queries = no_child_queries
+        
         # make the terminals and nonterminals
         self.terminals = [f"t{i}" for i in range(num_terminals)]
         self.nonterminals = [f"nt{i}" for i in range(num_nonterminals)]
@@ -167,7 +169,8 @@ class PCFG(Language):
     def sample(self):
         """Generate a document from the PCFG, i.e. a sentence, a query, and a response."""
         sentence = self._sample()
-        while len(sentence) <= 3:
+        # at least 2 tokens, guaranteeing one has a parent
+        while len(sentence) < 2:
             sentence = self._sample()
 
         # queries are only parent, child #n, and sibling #n
@@ -179,13 +182,16 @@ class PCFG(Language):
 
         # pick a random item to query
         tokens = [self.BOS] + [int(x.label[1:]) + self.TERMINAL_START for x in sentence]
-        query_item = np.random.randint(0, len(sentence))
+        start = 0
+        if self.no_child_queries and self.no_sibling_queries: # must be a parent query
+            start = 1
+        query_item = np.random.randint(start, len(sentence))
         query_item_pos = 1 + query_item
 
         # generate the possible targets for each query type
         possible_queries_and_targets = {
             QueryType.PARENT: [i for i in range(len(sentence)) if sentence[i].id == sentence[query_item].head_id],
-            QueryType.CHILD: [i for i in range(len(sentence)) if sentence[i].head_id == sentence[query_item].id],
+            QueryType.CHILD: [i for i in range(len(sentence)) if sentence[i].head_id == sentence[query_item].id] if not self.no_child_queries else [],
             QueryType.SIBLING: [i for i in range(len(sentence)) if (sentence[i].head_id == sentence[query_item].head_id and i != query_item)] if not self.no_sibling_queries else []
         }
         # print(self.prettify(tokens))
