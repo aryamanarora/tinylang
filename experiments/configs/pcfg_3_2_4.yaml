@@ -18,7 +18,7 @@ language:
 evaluators:
   - class: "SummaryEvaluator"
     config:
-      run_every_n_steps: 100
+      run_every_n_steps: 1000
   - class: "AttentionEvaluator"
     config:
       run_every_n_steps: 80000

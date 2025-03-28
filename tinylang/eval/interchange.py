@@ -61,7 +61,7 @@ class InterchangeEvaluator(Evaluator):
 
                             log_odds_ratio = old_base_prob.log() - intervened_base_prob.log() + intervened_prob.log() - old_prob.log()
 
-                            label = f"{t}.{label_type}.{query}.{layer - 1}"
+                            label = f"{layer - 1}.{t}.{label_type}.{query}"
                             self.all_eval_stats[step][f"{label}.kl_div"].append(kl_div)
                             self.all_eval_stats[step][f"{label}.prob_diff"].append((intervened_prob - old_prob).item())
                             self.all_eval_stats[step][f"{label}.log_odds_ratio"].append(log_odds_ratio.item())
@@ -79,5 +79,22 @@ class InterchangeEvaluator(Evaluator):
             print('------')
 
     def plot(self, log_dir: str):
-        pass
+        df = self.df
+        df = df.groupby(["step", "variable"]).mean().reset_index()
+        df["layer"] = df["variable"].str.split(".").str[0]
+        df["type"] = df["variable"].str.split(".").str[1]
+        df["label_type"] = df["variable"].str.split(".").str[2]
+        df["query"] = df["variable"].str.split(".").str[3]
+
+        # make plot
+        for type in df["type"].unique():
+            for variable in df["variable"].unique():
+                df_subset = df[df["type"] == type]
+                df_subset = df_subset[df_subset["variable"] == variable]
+                plot = (
+                    p9.ggplot(df_subset, p9.aes(x="step", y="value", color="query"))
+                    + p9.geom_line()
+                    + p9.facet_grid("label_type~layer")
+                )
+                plot.save(f"{log_dir}/{str(self)}.{type}.{variable}.png")
             

@@ -54,8 +54,8 @@ class ProbeEvaluator(Evaluator):
     @ignore_warnings(category=Warning)
     def post_eval(self, step: int):
         for subset in self.activations[step]:
-            activations = torch.stack(self.activations[step][subset]).detach() # shape: (n, d)
-            labels = torch.tensor(self.labels[step][subset]).detach() # shape: (n,)
+            activations = torch.stack(self.activations[step][subset]).cpu().detach() # shape: (n, d)
+            labels = torch.tensor(self.labels[step][subset]).cpu().detach() # shape: (n,)
 
             # first half is train set
             train_len = len(activations) // 2
@@ -69,27 +69,27 @@ class ProbeEvaluator(Evaluator):
             print(f"{subset:>40}: {acc:.4%}")
             self.all_eval_stats[step][f"{subset}.acc"].append(acc)
 
-            # now do MLP probe
-            num_labels = max(labels) + 1
-            mlp = MLPProbe(activations.shape[1], activations.shape[1] * 2, num_labels)
-            mlp.train()
-            optimizer = torch.optim.Adam(mlp.parameters(), lr=1e-2)
-            # iterator = tqdm(range(4000))
-            for _ in range(4000):
-                optimizer.zero_grad()
-                preds = mlp(activations[:train_len])
-                loss = nn.functional.cross_entropy(preds, labels[:train_len])
-                loss.backward()
-                # iterator.set_postfix({"loss": loss.item()})
-                optimizer.step()
+            # # now do MLP probe
+            # num_labels = max(labels) + 1
+            # mlp = MLPProbe(activations.shape[1], activations.shape[1] * 2, num_labels)
+            # mlp.train()
+            # optimizer = torch.optim.Adam(mlp.parameters(), lr=1e-2)
+            # # iterator = tqdm(range(4000))
+            # for _ in range(4000):
+            #     optimizer.zero_grad()
+            #     preds = mlp(activations[:train_len])
+            #     loss = nn.functional.cross_entropy(preds, labels[:train_len])
+            #     loss.backward()
+            #     # iterator.set_postfix({"loss": loss.item()})
+            #     optimizer.step()
             
-            # evaluate MLP probe
-            mlp.eval()
-            with torch.no_grad():
-                preds = mlp(activations[train_len:])
-                acc = ((preds.argmax(dim=1) == labels[train_len:]).sum() / len(preds)).item()
-                print(f"{subset:>40} (MLP): {acc:.4%}")
-                self.all_eval_stats[step][f"{subset}.mlp_acc"].append(acc)
+            # # evaluate MLP probe
+            # mlp.eval()
+            # with torch.no_grad():
+            #     preds = mlp(activations[train_len:])
+            #     acc = ((preds.argmax(dim=1) == labels[train_len:]).sum() / len(preds)).item()
+            #     print(f"{subset:>40} (MLP): {acc:.4%}")
+            #     self.all_eval_stats[step][f"{subset}.mlp_acc"].append(acc)
 
     def plot(self, log_dir: str):
         df = self.df

@@ -133,8 +133,14 @@ class Experiment:
 
     def eval_step(self, step: int):
         """Run all evaluators."""
+        # skip if step is not divisible by run_every_n_steps
+        if any(step % evaluator.run_every_n_steps != 0 for evaluator in self.evaluators):
+            return
+
+        # set model to eval
         self.model.model.eval()
         
+        # run all evaluators
         for evaluator in self.evaluators:
             if step % evaluator.run_every_n_steps == 0:
                 eval_batch_size = self.training_config.eval_batch_size if evaluator.do_batching else self.training_config.num_eval_steps * self.training_config.eval_batch_size
@@ -144,8 +150,11 @@ class Experiment:
                     outputs = self.model.step(inputs["input_ids"], inputs["labels"])
                     evaluator.eval(self.model, self.language, inputs, outputs, step=step)
                 evaluator.post_eval(step=step)
+                torch.cuda.empty_cache()
+
+        # set model to train
         for param in self.model.model.parameters():
-            param.requires_grad = True 
+            param.requires_grad = True
         self.model.model.train()
 
     def make_plots(self, all_eval_stats: dict[int, dict]):
