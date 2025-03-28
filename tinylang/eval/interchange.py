@@ -70,13 +70,13 @@ class InterchangeEvaluator(Evaluator):
             pv_gpt2._cleanup_states()
                             
 
-
     def post_eval(self, step: int):
         for ending in ["kl_div", "prob_diff", "log_odds_ratio"]:
             top = [(np.mean(v), k) for k, v in self.all_eval_stats[step].items() if k.endswith(ending)]
             for v, k in sorted(top):
                 print(f"{k:>80}: {v:.12f}")
             print('------')
+
 
     def plot(self, log_dir: str):
         df = self.df

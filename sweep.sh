@@ -1,8 +1,8 @@
-# nlprun -q jag -g 1 -a boundless -n 3_2_4_right 'uv run tinylang experiments/configs/pcfg_3_2_4_right.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_16_right 'uv run tinylang experiments/configs/pcfg_3_2_16_right.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_64_right 'uv run tinylang experiments/configs/pcfg_3_2_64_right.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_128_right 'uv run tinylang experiments/configs/pcfg_3_2_128_right.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_256_right 'uv run tinylang experiments/configs/pcfg_3_2_256_right.yaml'
+nlprun -q jag -g 1 -a boundless -n 3_2_4_right 'uv run tinylang experiments/configs/pcfg_3_2_4_right.yaml'
+nlprun -q jag -g 1 -a boundless -n 3_2_16_right 'uv run tinylang experiments/configs/pcfg_3_2_16_right.yaml'
+nlprun -q jag -g 1 -a boundless -n 3_2_64_right 'uv run tinylang experiments/configs/pcfg_3_2_64_right.yaml'
+nlprun -q jag -g 1 -a boundless -n 3_2_128_right 'uv run tinylang experiments/configs/pcfg_3_2_128_right.yaml'
+nlprun -q jag -g 1 -a boundless -n 3_2_256_right 'uv run tinylang experiments/configs/pcfg_3_2_256_right.yaml'
 
 nlprun -q jag -g 1 -a boundless -n 3_2_4 'uv run tinylang experiments/configs/pcfg_3_2_4.yaml'
 nlprun -q jag -g 1 -a boundless -n 3_2_16 'uv run tinylang experiments/configs/pcfg_3_2_16.yaml'
