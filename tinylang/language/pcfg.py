@@ -170,7 +170,7 @@ class PCFG(Language):
         """Generate a document from the PCFG, i.e. a sentence, a query, and a response."""
         sentence = self._sample()
         # at least 2 tokens, guaranteeing one has a parent
-        while len(sentence) < 2:
+        while len(sentence) < 3:
             sentence = self._sample()
 
         # queries are only parent, child #n, and sibling #n

@@ -26,10 +26,19 @@ class InterchangeEvaluator(Evaluator):
         
 
         for layer in range(1, len(hidden_states)):
-            pv_config = pv.IntervenableConfig({
-                "layer": layer - 1,
-                "component": "value_output",
-            })
+            true_layer = layer - 1
+            config = [
+                {"layer": true_layer, "component": "value_output", "group_key": 0, "unit": "pos"},
+                {"layer": true_layer, "component": "query_output", "group_key": 1, "unit": "pos"},
+                {"layer": true_layer, "component": "key_output", "group_key": 1, "unit": "pos"},
+            ]
+            for i in range(true_layer + 1, len(hidden_states) - 1):
+                config.extend([
+                    {"layer": i, "component": "query_output", "group_key": 1, "unit": "pos"},
+                    {"layer": i, "component": "key_output", "group_key": 1, "unit": "pos"},
+                ])
+            num_restores = len(config) - 1
+            pv_config = pv.IntervenableConfig(config)
             pv_gpt2 = pv.IntervenableModel(pv_config, model=model.model)
             for t in types:
                 for label_type in probing_schemas[0]["target_distributions"]:
@@ -46,11 +55,21 @@ class InterchangeEvaluator(Evaluator):
                             intervened_input_ids = input_ids.clone()
                             intervened_input_ids[target_item_orig_pos] = target_item_new
                             intervened_input_ids[target_item_pos] = target_item_orig
+
+                            base_inputs = {"input_ids": input_ids.unsqueeze(0)}
+                            pos = list(range(base_inputs["input_ids"].shape[-1]))
                             _, intervened_outputs = pv_gpt2(
-                                base={"input_ids": input_ids.unsqueeze(0)},
-                                sources={"input_ids": intervened_input_ids.unsqueeze(0)},
-                                unit_locations={"sources->base": [query_pos]},
+                                base=base_inputs,
+                                sources=[
+                                    {"input_ids": intervened_input_ids.unsqueeze(0)},
+                                    base_inputs,
+                                ],
+                                unit_locations={"sources->base": ((
+                                    [[[query_pos],],] + [[pos]]*num_restores,
+                                    [[[query_pos],],] + [[pos]]*num_restores,
+                                ))},
                             )
+
                             intervened_probs = torch.log_softmax(intervened_outputs["logits"].squeeze(0)[target_item_pos - 1], dim=-1)
                             output_probs = torch.log_softmax(outputs["logits"][batch_idx][target_item_pos - 1], dim=-1)
                             kl_div = torch.nn.functional.kl_div(intervened_probs, output_probs, log_target=True, reduction="batchmean").item()
