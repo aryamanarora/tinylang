@@ -93,6 +93,9 @@ class Experiment:
         iterator = tqdm(range(self.training_config.num_train_steps + 1), desc="Training") if self.verbose else range(self.training_config.num_train_steps + 1)
         all_eval_stats = defaultdict(list)
         for step in iterator:
+            # print current cuda memory usage
+            # print(torch.cuda.memory_stats(device=self.model.model.device)["allocated_bytes.all.peak"])
+
             # one train step
             if step != self.training_config.num_train_steps:
                 train_loss = self.train_step(step)
@@ -131,6 +134,11 @@ class Experiment:
         loss.backward()
         self.optimizer.step()
 
+        # clear memory
+        del inputs
+        del outputs
+        torch.cuda.empty_cache()
+
         # return loss
         return loss.item()
 
@@ -143,18 +151,32 @@ class Experiment:
 
         # set model to eval
         self.model.model.eval()
-        
+
+        # batched evals
+        eval_batch_size = self.training_config.eval_batch_size
+        eval_steps = self.training_config.num_eval_steps
+        all_outputs = []
+        for eval_step in (tqdm(range(eval_steps), desc="Evals") if self.verbose else range(eval_steps)):
+            inputs = self.language.get_eval_step(step=eval_step, batch_size=eval_batch_size)
+            outputs = self.model.step(inputs["input_ids"], inputs["labels"])
+            for k in outputs:
+                if isinstance(outputs[k], torch.Tensor):
+                    outputs[k] = outputs[k].cpu()
+            all_outputs.append(outputs)
+            for evaluator in self.evaluators:
+                if step % evaluator.run_every_n_steps == 0:
+                    evaluator.eval(self.model, self.language, inputs, outputs, step=step)
+
         # run all evaluators
         for evaluator in self.evaluators:
             if step % evaluator.run_every_n_steps == 0:
-                eval_batch_size = self.training_config.eval_batch_size if evaluator.do_batching else self.training_config.num_eval_steps * self.training_config.eval_batch_size
-                eval_steps = self.training_config.num_eval_steps if evaluator.do_batching else 1
-                for eval_step in (tqdm(range(eval_steps), desc=str(evaluator)) if self.verbose else range(eval_steps)):
-                    inputs = self.language.get_eval_step(step=eval_step, batch_size=eval_batch_size)
-                    outputs = self.model.step(inputs["input_ids"], inputs["labels"])
-                    evaluator.eval(self.model, self.language, inputs, outputs, step=step)
                 evaluator.post_eval(step=step)
+                # print(torch.cuda.memory_stats(device=self.model.model.device)["allocated_bytes.all.peak"])
                 torch.cuda.empty_cache()
+        
+        # clear memory
+        del all_outputs
+        torch.cuda.empty_cache()
 
         # set model to train
         for param in self.model.model.parameters():

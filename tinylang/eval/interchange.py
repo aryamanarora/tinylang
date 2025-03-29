@@ -40,6 +40,7 @@ class InterchangeEvaluator(Evaluator):
             num_restores = len(config) - 1
             pv_config = pv.IntervenableConfig(config)
             pv_gpt2 = pv.IntervenableModel(pv_config, model=model.model)
+            pv_gpt2.disable_model_gradients()
             for t in types:
                 for label_type in probing_schemas[0]["target_distributions"]:
                     for query in probing_schemas[0]["queries"]:
@@ -67,11 +68,13 @@ class InterchangeEvaluator(Evaluator):
                                 unit_locations={"sources->base": ((
                                     [[[query_pos],],] + [[pos]]*num_restores,
                                     [[[query_pos],],] + [[pos]]*num_restores,
-                                ))},
+                                ))}, 
                             )
-
-                            intervened_probs = torch.log_softmax(intervened_outputs["logits"].squeeze(0)[target_item_pos - 1], dim=-1)
-                            output_probs = torch.log_softmax(outputs["logits"][batch_idx][target_item_pos - 1], dim=-1)
+                            
+                            intervened_logits = intervened_outputs["logits"].cpu()
+                            output_logits = outputs["logits"][batch_idx].cpu()
+                            intervened_probs = torch.log_softmax(intervened_logits.squeeze(0)[target_item_pos - 1], dim=-1)
+                            output_probs = torch.log_softmax(output_logits[target_item_pos - 1], dim=-1)
                             kl_div = torch.nn.functional.kl_div(intervened_probs, output_probs, log_target=True, reduction="batchmean").item()
                             intervened_prob = intervened_probs.exp()[target_item_new]
                             old_prob = output_probs.exp()[target_item_new]
@@ -86,6 +89,7 @@ class InterchangeEvaluator(Evaluator):
                             self.all_eval_stats[step][f"{label}.log_odds_ratio"].append(log_odds_ratio.item())
 
             # deregister intervention
+            pv_gpt2.enable_model_gradients()
             pv_gpt2._cleanup_states()
                             
 

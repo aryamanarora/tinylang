@@ -45,7 +45,7 @@ class ProbeEvaluator(Evaluator):
                             if type != probing_schemas[batch_idx]["type"]:
                                 continue
                             query_pos = probing_schemas[batch_idx]["queries"][query]["pos"]
-                            activations.append(hidden_states[layer][batch_idx, query_pos])
+                            activations.append(hidden_states[layer][batch_idx, query_pos].cpu())
                             labels.append(probing_schemas[batch_idx]["target_distributions"][label_type])
                         self.activations[step][f"{layer}.{type}.{label_type}.{query}"].extend(activations)
                         self.labels[step][f"{layer}.{type}.{label_type}.{query}"].extend(labels)

@@ -48,10 +48,10 @@ class GPT2(Model):
         """
         output = self.model(input_ids, labels=labels)
         return {
-            "logits": output.logits,
-            "loss": output.loss,
-            "hidden_states": output.hidden_states,
-            "attentions": output.attentions,
+            "logits": output.logits.cpu(),
+            "loss": output.loss, # keep on gpu for backprop
+            "hidden_states": [h.cpu() for h in output.hidden_states],
+            "attentions": [a.cpu() for a in output.attentions],
         }
 
 
