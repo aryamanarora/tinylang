@@ -182,10 +182,11 @@ class PCFG(Language):
 
         # pick a random item to query
         tokens = [self.BOS] + [int(x.label[1:]) + self.TERMINAL_START for x in sentence]
-        start = 0
+        start, end = 0, len(sentence)
         if self.no_child_queries and self.no_sibling_queries: # must be a parent query
-            start = 1
-        query_item = np.random.randint(start, len(sentence))
+            if self.head_position == "left": start = 1
+            elif self.head_position == "right": end = len(sentence) - 1
+        query_item = np.random.randint(start, end)
         query_item_pos = 1 + query_item
 
         # generate the possible targets for each query type
