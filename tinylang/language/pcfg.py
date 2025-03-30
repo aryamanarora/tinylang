@@ -9,6 +9,8 @@ import termcolor
 
 COLORS = ["red", "green", "blue", "yellow", "magenta", "cyan", "light_red", "light_green", "light_blue", "light_yellow", "light_magenta", "light_cyan"]
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+MAX_RECURSION_DEPTH = 20
+MAX_LENGTH = 1024
 
 
 class QueryType(IntEnum):
@@ -30,6 +32,7 @@ class PCFG(Language):
             mask_nonquery: bool=False,
             no_sibling_queries: bool=False,
             no_child_queries: bool=False,
+            no_start_queries: bool=True,
         ):
         super().__init__()
         self.PAD = 0
@@ -60,6 +63,7 @@ class PCFG(Language):
         self.mask_nonquery = mask_nonquery
         self.no_sibling_queries = no_sibling_queries
         self.no_child_queries = no_child_queries
+        self.no_start_queries = no_start_queries
         
         # make the terminals and nonterminals
         self.terminals = [f"t{i}" for i in range(num_terminals)]
@@ -67,7 +71,7 @@ class PCFG(Language):
 
         # each nonterminal has a max depth
         # its immediate children must have a depth less than this
-        self.max_depths = {nt: np.random.randint(1, max_depth) for nt in self.nonterminals}
+        self.max_depths = {nt: np.random.randint(1, max_depth) for nt in self.nonterminals} if max_depth > 0 else None
 
         # make the rules
         # each nonterminal has a list of production rules
@@ -75,7 +79,7 @@ class PCFG(Language):
         for nt in self.nonterminals:
             num_rules = np.random.randint(1, max_rules_per_nt)
             # select acceptable nonterminals
-            nonterminals_subset = [x for x in self.nonterminals if self.max_depths[x] > self.max_depths[nt]]
+            nonterminals_subset = [x for x in self.nonterminals if self.max_depths[x] > self.max_depths[nt]] if self.max_depths else self.nonterminals
             for _ in range(num_rules):
                 lhs = nt
                 rhs = np.random.choice(nonterminals_subset + self.terminals, size=np.random.randint(1, max_rhs_len), replace=False)
@@ -93,7 +97,7 @@ class PCFG(Language):
             self.head_probs[nt] = np.random.dirichlet(np.ones(num_terminals))
         
         # finally, the start symbol has a distribution over nonterminals as its head
-        self.start_probs = np.random.dirichlet(np.ones(num_nonterminals))
+        self.start_probs = np.ones(num_nonterminals) / num_nonterminals
     
 
     def prepare_sets(self, train_batch_size: int, eval_batch_size: int, num_train_steps: int, num_eval_steps: int):
@@ -136,6 +140,7 @@ class PCFG(Language):
         generated = [Node(str(np.random.choice(self.nonterminals, p=self.start_probs)), 0, None)]
         next_id = 1
         done = False
+        depth = 0
         while not done:
             generated_new = []
             done_new = True
@@ -163,15 +168,40 @@ class PCFG(Language):
 
             generated = generated_new
             done = done_new
-            
+            depth += 1
+            if depth > MAX_RECURSION_DEPTH or len(generated) > MAX_LENGTH:
+                raise RecursionError("MAX_RECURSION_DEPTH or MAX_LENGTH reached")
+
         return generated
     
     def sample(self):
         """Generate a document from the PCFG, i.e. a sentence, a query, and a response."""
-        sentence = self._sample()
-        # at least 2 tokens, guaranteeing one has a parent
-        while len(sentence) < 3:
-            sentence = self._sample()
+        sentence = None
+        while sentence is None:
+            try:
+                sentence = self._sample()
+                if len(sentence) < 3:
+                    sentence = None
+                    continue
+            except RecursionError:
+                sentence = None
+                continue
+
+            # check if any eligible positions are left
+            eligible_pos = list(range(len(sentence)))
+            if self.no_child_queries and self.no_sibling_queries: # must be a parent query
+                if self.head_position == "left":
+                    if self.no_start_queries:
+                        eligible_pos = [i for i in eligible_pos[1:] if sentence[i].head_id != sentence[0].id]
+                    else:
+                        eligible_pos = eligible_pos[1:]
+                elif self.head_position == "right":
+                    if self.no_start_queries:
+                        eligible_pos = [i for i in eligible_pos[:-1] if sentence[i].head_id != sentence[-1].id]
+                    else:
+                        eligible_pos = eligible_pos[:-1]
+            if len(eligible_pos) == 0:
+                sentence = None
 
         # queries are only parent, child #n, and sibling #n
         # we uniformly sample the item we want to ask the query about, and then sample the query type
@@ -180,13 +210,7 @@ class PCFG(Language):
         # TODO: order
         # TODO: this code is so sus, how do we handle path length > 1 (we will have to eventually)
 
-        # pick a random item to query
-        tokens = [self.BOS] + [int(x.label[1:]) + self.TERMINAL_START for x in sentence]
-        start, end = 0, len(sentence)
-        if self.no_child_queries and self.no_sibling_queries: # must be a parent query
-            if self.head_position == "left": start = 1
-            elif self.head_position == "right": end = len(sentence) - 1
-        query_item = np.random.randint(start, end)
+        query_item = np.random.choice(eligible_pos)
         query_item_pos = 1 + query_item
 
         # generate the possible targets for each query type
@@ -195,6 +219,7 @@ class PCFG(Language):
             QueryType.CHILD: [i for i in range(len(sentence)) if sentence[i].head_id == sentence[query_item].id] if not self.no_child_queries else [],
             QueryType.SIBLING: [i for i in range(len(sentence)) if (sentence[i].head_id == sentence[query_item].head_id and i != query_item)] if not self.no_sibling_queries else []
         }
+        tokens = [self.BOS] + [int(x.label[1:]) + self.TERMINAL_START for x in sentence]
         # print(self.prettify(tokens))
         # print("    ", sentence[query_item])
         # for k, v in possible_queries_and_targets.items():
@@ -222,7 +247,11 @@ class PCFG(Language):
         target_item = int(sentence[target_item].label[1:]) + self.TERMINAL_START
 
         # generate the overall sequence to train on
-        query = [query_item, query_type + self.QUERY_START, target_item]
+        only_parent_queries = self.no_child_queries and self.no_sibling_queries
+        if only_parent_queries:
+            query = [query_item, target_item]
+        else:
+            query = [query_item, query_type + self.QUERY_START, target_item]
         tokens = tokens + [self.EOS] + query + [self.EOS]
 
         # generate probing schema
@@ -230,8 +259,8 @@ class PCFG(Language):
             "type": QueryType(query_type).name,
             "keys": {
                 "query_item": [len(tokens) - 1 - len(query)],
-                "query_type": [len(tokens) - 1 - len(query) + 1],
-                "target_item": [len(tokens) - 1 - len(query) + 2],
+                "query_type": [len(tokens) - 1 - len(query) + 1] if not only_parent_queries else [0],
+                "target_item": [len(tokens) - 1 - len(query) + (2 if not only_parent_queries else 1)],
                 "_target_item_orig": [target_item_pos],
                 "query_item_orig": [query_item_pos],
                 "divider": [len(tokens) - 1 - len(query) - 1],
@@ -244,14 +273,14 @@ class PCFG(Language):
             "queries": {
                 "query_item": {
                     "pos": len(tokens) - 1 - len(query),
-                    "target_distribution": None,
+                    "target_distribution": None if only_parent_queries else torch.tensor(target_distribution),
                 },
                 "query_type": {
                     "pos": len(tokens) - 1 - len(query) + 1,
                     "target_distribution": torch.tensor(target_distribution),
                 },
                 "target_item": {
-                    "pos": len(tokens) - 1 - len(query) + 2,
+                    "pos": len(tokens) - 1 - len(query) + (2 if not only_parent_queries else 1),
                     "target_distribution": None,
                 },
                 "query_item_orig": {
@@ -268,9 +297,13 @@ class PCFG(Language):
                 },
             },
             "target_distributions": {
-                "target_item": int(self.id_to_token[target_item][1:]),
+                "target_item_orig": int(self.id_to_token[target_item][1:]),
+                "query_item_orig": int(self.id_to_token[query_item][1:]),
             }
         }
+
+        if only_parent_queries:
+            del probing_schema["queries"]["query_type"]
         
         return tokens, probing_schema
     

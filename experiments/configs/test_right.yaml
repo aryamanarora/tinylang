@@ -8,12 +8,12 @@ model:
 language:
   class: "PCFG"
   config:
-    num_terminals: 200
-    num_nonterminals: 100
+    num_terminals: 20
+    num_nonterminals: 10
     max_rhs_len: 10
     max_rules_per_nt: 5
     max_depth: 10
-    head_position: "left"
+    head_position: "right"
     mask_nonquery: True
     no_sibling_queries: True
     no_child_queries: True

@@ -96,16 +96,16 @@ class Experiment:
             # print current cuda memory usage
             # print(torch.cuda.memory_stats(device=self.model.model.device)["allocated_bytes.all.peak"])
 
+            # one eval step (we want to eval at init for baselines, and after training)
+            eval_stats = self.eval_step(step)
+            if eval_stats != {}:
+                all_eval_stats[step] = eval_stats
+
             # one train step
             if step != self.training_config.num_train_steps:
                 train_loss = self.train_step(step)
                 if self.verbose:
                     iterator.set_postfix(loss=train_loss)
-
-            # one eval step
-            eval_stats = self.eval_step(step)
-            if eval_stats != {}:
-                all_eval_stats[step] = eval_stats
 
             # optional save
             if self.training_config.save_every_n_steps is not None and step % self.training_config.save_every_n_steps == 0:
