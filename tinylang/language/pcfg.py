@@ -288,10 +288,10 @@ class PCFG(Language):
         if self.mask_nonquery:
             for i in range(len(tokens)):
                 length = len(tokens[i])
-                query_token = length - 3
+                target_token = length - 2
                 # mask all except query token
-                labels[i, :query_token] = -100
-                labels[i, query_token + 1:] = -100
+                labels[i, :target_token] = -100
+                labels[i, target_token + 1:] = -100
 
         ret = {
             "input_ids": tokens_padded,

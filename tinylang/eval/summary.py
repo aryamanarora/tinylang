@@ -25,7 +25,7 @@ class SummaryEvaluator(Evaluator):
                 if true_probs is None:
                     continue
                 target_pos = info["pos"]
-                target_val = inputs["labels"][i][target_pos + 1]
+                target_val = inputs["input_ids"][i][target_pos + 1]
                 pred_logits = logits[i, target_pos]
                 pred_probs = torch.nn.functional.log_softmax(pred_logits, dim=-1).to("cpu")
                 kl_divs = torch.nn.functional.kl_div(pred_probs, true_probs, reduction="none", log_target=False).sum(dim=-1)
