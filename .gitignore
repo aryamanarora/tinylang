@@ -11,5 +11,5 @@ wheels/
 .ipynb_checkpoints/
 
 # Logs
-experiments/logs/*
+experiments/logs*/*
 *.out

@@ -14,7 +14,7 @@ language:
     max_rules_per_nt: 10
     max_depth: 20
     head_position: "left"
-    mask_nonquery: False
+    mask_nonquery: True
     no_sibling_queries: True
     no_child_queries: True
 evaluators:
