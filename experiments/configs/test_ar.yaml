@@ -1,9 +1,9 @@
 model:
-  class: "GPT2"
+  class: "Llama"
   config:
     n_positions: 1024
     n_embd: 128 # n_inner is 4x by default
-    n_layer: 8
+    n_layer: 4
     n_head: 4
 language:
   class: "AR"
@@ -19,15 +19,15 @@ evaluators:
   # - class: "AttentionEvaluator"
   #   config:
   #     run_every_n_steps: 1000
-  # - class: "ProbeEvaluator"
-  #   config:
-  #     run_every_n_steps: 1000
-  # - class: "InterchangeEvaluator"
-  #   config:
-  #     run_every_n_steps: 1000
+  - class: "ProbeEvaluator"
+    config:
+      run_every_n_steps: 1000
+  - class: "InterchangeEvaluator"
+    config:
+      run_every_n_steps: 1000
 training:
   train_batch_size: 16
-  num_train_steps: 10000
+  num_train_steps: 4000
   eval_batch_size: 16
   num_eval_steps: 10
   lr: 1e-4

@@ -44,6 +44,13 @@ class AttentionEvaluator(Evaluator):
                             else:
                                 attn_score = attention[query_pos, key_pos].item()
                             self.all_eval_stats[step][f"{layer}.{head}.{type}.{q}.{k}.attn"].append(attn_score)
+                        
+                        # # check attn map types
+                        # diagonal = np.diag(attention)
+                        # self.all_eval_stats[step][f"{layer}.{head}.diag_score"].append((diagonal.sum() / len(diagonal)).item())
+
+                        # prev_token = np.diag(attention, k=-1)
+                        # self.all_eval_stats[step][f"{layer}.{head}.prev_token_score"].append((prev_token.sum() / len(prev_token)).item())
 
 
     def plot(self, log_dir: str):
