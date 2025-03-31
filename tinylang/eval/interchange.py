@@ -110,8 +110,8 @@ class InterchangeEvaluator(Evaluator):
 
 
             # deregister intervention
-            pv_gpt2.enable_model_gradients()
             pv_gpt2._cleanup_states()
+            torch.cuda.empty_cache()
                             
 
     def post_eval(self, step: int):
