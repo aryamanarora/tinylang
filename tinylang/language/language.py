@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import importlib
 import torch
+import pickle
 
 class Language(ABC):
     def __init__(self):
@@ -51,12 +52,13 @@ class Language(ABC):
         pass
 
 
-    @abstractmethod
     def save(self, path: str):
         """Save the language to a file."""
-        pass
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
 
     @classmethod
-    @abstractmethod
     def load(cls, path: str):
         """Load the language from a file."""
+        with open(path, "rb") as f:
+            return pickle.load(f)

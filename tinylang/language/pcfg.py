@@ -3,7 +3,6 @@ from collections import namedtuple, defaultdict
 import numpy as np
 from enum import IntEnum
 import torch
-import pickle
 import termcolor
 
 
@@ -355,15 +354,3 @@ class PCFG(Language):
             self.eval_probing_schemas[batch_start:batch_end],
             verbose=True,
         )
-    
-
-    def save(self, path: str):
-        """Save the PCFG to a file."""
-        with open(path, "wb") as f:
-            pickle.dump(self, f)
-
-    @classmethod
-    def load(cls, path: str):
-        """Load the PCFG from a file."""
-        with open(path, "rb") as f:
-            return pickle.load(f)
