@@ -272,7 +272,7 @@ class PCFG(Language):
             "queries": {
                 "query_item": {
                     "pos": len(tokens) - 1 - len(query),
-                    "target_distribution": None if only_parent_queries else torch.tensor(target_distribution),
+                    "target_distribution": None if not only_parent_queries else torch.tensor(target_distribution),
                 },
                 "query_type": {
                     "pos": len(tokens) - 1 - len(query) + 1,
