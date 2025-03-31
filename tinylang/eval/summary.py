@@ -33,3 +33,8 @@ class SummaryEvaluator(Evaluator):
                 self.all_eval_stats[step][f"{q}.kl_div"].append(kl_divs.item())
                 self.all_eval_stats[step][f"{type}.{q}.pred_prob"].append(pred_probs[target_val].exp().item())
                 self.all_eval_stats[step][f"{q}.pred_prob"].append(pred_probs[target_val].exp().item())
+    
+    def post_eval(self, step: int):
+        for key in self.all_eval_stats[step]:
+            if "pred_prob" in key:
+                print(f"{key:>40}: {np.mean(self.all_eval_stats[step][key]):.5%}")
