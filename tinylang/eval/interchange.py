@@ -8,6 +8,7 @@ import torch.nn as nn
 import pyvene as pv
 import random
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class InterchangeEvaluator(Evaluator):
@@ -33,81 +34,100 @@ class InterchangeEvaluator(Evaluator):
                 pv_gpt2 = pv.IntervenableModel(pv_config, model=model.model)
                 pv_gpt2.disable_model_gradients()
 
-                for t in types:
-                    for label_type in probing_schemas[0]["target_distributions"]:
-                        for query in probing_schemas[0]["queries"]:
-                            for batch_idx in range(len(hidden_states[layer])):
-                                if t != probing_schemas[batch_idx]["type"]:
-                                    continue
-                                input_ids = inputs["input_ids"][batch_idx]
-                                divider_pos = probing_schemas[batch_idx]["queries"]["divider"]["pos"]
-                                
-                                # how we will create the source sequence
-                                pos_to_change = probing_schemas[batch_idx]["queries"][label_type]["pos"]
-                                orig_value = probing_schemas[batch_idx]["target_distributions"][label_type]
-                                orig_token_value = input_ids[pos_to_change]
-                                # corrupted_value = random.choice([x for x in input_ids[1:divider_pos] if x != orig_token_value])
-                                corrupted_value = random.randint(language.TERMINAL_START, language.QUERY_START - 1)
+                for label_type in probing_schemas[0]["target_distributions"]:
+                    for query in probing_schemas[0]["queries"]:
 
-                                # create the source sequence
-                                corrupted_input_ids = inputs["input_ids"][batch_idx].clone()
-                                corrupted_input_ids[pos_to_change] = corrupted_value
-                                base_inputs = {"input_ids": input_ids.unsqueeze(0)}
-                                corrupted_inputs = {"input_ids": corrupted_input_ids.unsqueeze(0)}
+                        all_inputs, all_corrupted_inputs = [], []
+                        all_unit_locations = []
 
-                                # if label_type == "query_item_orig":
-                                #     print(language.prettify(inputs["input_ids"][batch_idx], probing_schemas[batch_idx])[0])
-                                #     print(language.prettify(corrupted_input_ids))
-                                #     input()
+                        for batch_idx in range(len(hidden_states[layer])):
+                            input_ids = inputs["input_ids"][batch_idx]
+                            divider_pos = probing_schemas[batch_idx]["queries"]["divider"]["pos"]
+                            
+                            # how we will create the source sequence
+                            pos_to_change = probing_schemas[batch_idx]["queries"][label_type]["pos"]
+                            orig_value = probing_schemas[batch_idx]["target_distributions"][label_type]
+                            orig_token_value = input_ids[pos_to_change]
+                            # corrupted_value = random.choice([x for x in input_ids[1:divider_pos] if x != orig_token_value])
+                            corrupted_value = random.randint(language.TERMINAL_START, language.QUERY_START - 2)
+                            corrupted_value += (1 if corrupted_value >= orig_token_value else 0)
 
-                                # do the intervention at the query position
-                                pos_to_intervene = probing_schemas[batch_idx]["queries"][query]["pos"]
-                                corrupted_outputs, intervened_outputs = pv_gpt2(
-                                    base=corrupted_inputs,
-                                    sources=[base_inputs],
-                                    unit_locations={"sources->base": int(pos_to_intervene)},
-                                    output_original_output=True
-                                )
+                            # create the source sequence
+                            corrupted_input_ids = input_ids.clone()
+                            corrupted_input_ids[pos_to_change] = corrupted_value
+                            all_inputs.append(input_ids)
+                            all_corrupted_inputs.append(corrupted_input_ids)
 
-                                # compute metrics
-                                pos_to_check = probing_schemas[batch_idx]["queries"]["target_item"]["pos"] - 1
-                                orig_output = inputs["input_ids"][batch_idx][pos_to_check + 1]
-                                intervened_logits = intervened_outputs["logits"].cpu()
-                                original_logits = outputs["logits"][batch_idx].cpu()
-                                corrupted_logits = corrupted_outputs["logits"].cpu()
+                            pos_to_intervene = probing_schemas[batch_idx]["queries"][query]["pos"]
+                            all_unit_locations.append(int(pos_to_intervene))
 
-                                intervened_probs = torch.log_softmax(intervened_logits.squeeze(0)[pos_to_check], dim=-1)
-                                corrupted_probs = torch.log_softmax(corrupted_logits.squeeze(0)[pos_to_check], dim=-1)
+                            # if label_type == "query_item_orig":
+                            #     print(language.prettify(inputs["input_ids"][batch_idx], probing_schemas[batch_idx])[0])
+                            #     print(language.prettify(corrupted_input_ids))
+                            #     input()
 
-                                # # print top 5 logits for each
-                                # intervened_top_5 = intervened_logits.squeeze(0)[pos_to_check].topk(5)
-                                # corrupted_top_5 = corrupted_logits.squeeze(0)[pos_to_check].topk(5)
-                                # original_top_5 = original_logits[pos_to_check].topk(5)
+                        base_inputs = {"input_ids": torch.stack(all_inputs)}
+                        corrupted_inputs = {"input_ids": torch.stack(all_corrupted_inputs)}
 
-                                # if step > 1500 and batch_idx == 0:
-                                #     print(f'---\n{label_type}')
-                                #     print(language.prettify(inputs["input_ids"][batch_idx]))
-                                #     print(language.prettify(corrupted_input_ids))
-                                #     for l in [intervened_top_5, corrupted_top_5, original_top_5]:
-                                #         for i in range(5):
-                                #             print(f"{language.id_to_token[l.indices[i].item()]:>5}: {l.values[i]:.5f}")
-                                #         print('---')
-                                #     input()
+                        # do the intervention at the query position
+                        corrupted_outputs, intervened_outputs = pv_gpt2(
+                            base=corrupted_inputs,
+                            sources=[base_inputs],
+                            unit_locations={"sources->base": ([[[x] for x in all_unit_locations]], [[[x] for x in all_unit_locations]])},
+                            output_original_output=True,
+                        )
 
-                                kl_div = torch.nn.functional.kl_div(intervened_probs, corrupted_probs, log_target=True, reduction="batchmean")
-                                intervened_prob = intervened_probs.exp()[orig_output]
-                                corrupted_prob = corrupted_probs.exp()[orig_output]
-                                original_prob = torch.log_softmax(original_logits[pos_to_check], dim=-1).exp()[orig_output]
-                                # percent_restored = (intervened_prob - corrupted_prob) / (original_prob - corrupted_prob)
+                        # compute metrics
+                        for batch_idx in range(len(hidden_states[layer])):
+                            t = probing_schemas[batch_idx]["type"]
+                            pos_to_check = probing_schemas[batch_idx]["queries"]["target_item"]["pos"] - 1
+                            orig_output = inputs["input_ids"][batch_idx][pos_to_check + 1]
+                            intervened_logits = intervened_outputs["logits"][batch_idx].cpu()
+                            original_logits = outputs["logits"][batch_idx].cpu()
+                            corrupted_logits = corrupted_outputs["logits"][batch_idx].cpu()
 
-                                label = f"{layer}.{t}.{label_type}.{query}.{component}"
-                                label_original = f"original.{t}.{label_type}.{query}.{component}"
-                                label_corrupted = f"corrupted.{t}.{label_type}.{query}.{component}"
-                                self.all_eval_stats[step][f"{label}.kl_div"].append(kl_div.item())
-                                self.all_eval_stats[step][f"{label}.restored_prob"].append(intervened_prob.item())
-                                self.all_eval_stats[step][f"{label_corrupted}.restored_prob"].append(corrupted_prob.item())
-                                self.all_eval_stats[step][f"{label_original}.restored_prob"].append(original_prob.item())
-                                # self.all_eval_stats[step][f"{label}.percent_restored"].append(percent_restored.item())
+                            intervened_logit = intervened_logits.squeeze(0)[pos_to_check]
+                            corrupted_logit = corrupted_logits.squeeze(0)[pos_to_check]
+                            intervened_probs = torch.log_softmax(intervened_logit, dim=-1)
+                            corrupted_probs = torch.log_softmax(corrupted_logit, dim=-1)
+
+                            # # print top 5 logits for each
+                            # intervened_top_5 = intervened_logits.squeeze(0)[pos_to_check].topk(5)
+                            # corrupted_top_5 = corrupted_logits.squeeze(0)[pos_to_check].topk(5)
+                            # original_top_5 = original_logits[pos_to_check].topk(5)
+
+                            # if step > 1500 and batch_idx == 0:
+                            #     print(f'---\n{label_type}')
+                            #     print(language.prettify(inputs["input_ids"][batch_idx]))
+                            #     print(language.prettify(corrupted_input_ids))
+                            #     for l in [intervened_top_5, corrupted_top_5, original_top_5]:
+                            #         for i in range(5):
+                            #             print(f"{language.id_to_token[l.indices[i].item()]:>5}: {l.values[i]:.5f}")
+                            #         print('---')
+                            #     input()
+
+                            kl_div = torch.nn.functional.kl_div(intervened_probs, corrupted_probs, log_target=True, reduction="batchmean")
+                            intervened_prob = intervened_probs.exp()[orig_output]
+                            corrupted_prob = corrupted_probs.exp()[orig_output]
+                            original_prob = torch.log_softmax(original_logits[pos_to_check], dim=-1).exp()[orig_output]
+                            intervened_logit = intervened_logit[orig_output]
+                            corrupted_logit = corrupted_logit[orig_output]
+                            original_logit = original_logits[pos_to_check][orig_output]
+                            # percent_restored = (intervened_prob - corrupted_prob) / (original_prob - corrupted_prob)
+
+                            label = f"{layer}.{t}.{label_type}.{query}.{component}"
+                            label_original = f"original.{t}.{label_type}.{query}.{component}"
+                            label_corrupted = f"corrupted.{t}.{label_type}.{query}.{component}"
+                            self.all_eval_stats[step][f"{label}.kl_div"].append(kl_div.item())
+                            self.all_eval_stats[step][f"{label}.restored_prob"].append(intervened_prob.item())
+                            self.all_eval_stats[step][f"{label_corrupted}.restored_prob"].append(corrupted_prob.item())
+                            self.all_eval_stats[step][f"{label_original}.restored_prob"].append(original_prob.item())
+
+                            # logits
+                            self.all_eval_stats[step][f"{label}.restored_logit"].append(intervened_logit.item())
+                            self.all_eval_stats[step][f"{label_corrupted}.restored_logit"].append(corrupted_logit.item())
+                            self.all_eval_stats[step][f"{label_original}.restored_logit"].append(original_logit.item())
+                            # self.all_eval_stats[step][f"{label}.percent_restored"].append(percent_restored.item())
 
                 # deregister intervention
                 pv_gpt2._cleanup_states()
@@ -115,7 +135,7 @@ class InterchangeEvaluator(Evaluator):
                             
 
     def post_eval(self, step: int):
-        for ending in ["kl_div", "restored_prob"]:
+        for ending in ["kl_div", "restored_prob", "restored_logit"]:
             top = [(np.mean(v), k) for k, v in self.all_eval_stats[step].items() if k.endswith(ending)]
             for v, k in sorted(top):
                 print(f"{k:>80}: {v:.12f}")
