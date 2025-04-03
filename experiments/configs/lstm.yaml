@@ -1,0 +1,27 @@
+model:
+  class: "LSTM"
+  config:
+    n_embd: 64  # embedding dimension
+    n_layer: 2  # number of LSTM layers
+language:
+  class: "PCFG"
+  config:
+    num_terminals: 20
+    num_nonterminals: 10
+    max_rhs_len: 10
+    max_rules_per_nt: 5
+    max_depth: 10
+    head_position: "left"
+    mask_nonquery: True
+    no_sibling_queries: True
+    no_child_queries: True
+evaluators:
+  - class: "SummaryEvaluator"
+    config:
+      run_every_n_steps: 200
+training:
+  train_batch_size: 32
+  num_train_steps: 20000
+  eval_batch_size: 32
+  num_eval_steps: 10
+  lr: 1e-4

@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 import importlib
 import torch
 from typing import Any
+
+
 class Model(ABC):
     def __init__(self):
         return
