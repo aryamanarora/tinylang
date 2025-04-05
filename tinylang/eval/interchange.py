@@ -91,21 +91,6 @@ class InterchangeEvaluator(Evaluator):
                             intervened_probs = torch.log_softmax(intervened_logit, dim=-1)
                             corrupted_probs = torch.log_softmax(corrupted_logit, dim=-1)
 
-                            # # print top 5 logits for each
-                            # intervened_top_5 = intervened_logits.squeeze(0)[pos_to_check].topk(5)
-                            # corrupted_top_5 = corrupted_logits.squeeze(0)[pos_to_check].topk(5)
-                            # original_top_5 = original_logits[pos_to_check].topk(5)
-
-                            # if step > 1500 and batch_idx == 0:
-                            #     print(f'---\n{label_type}')
-                            #     print(language.prettify(inputs["input_ids"][batch_idx]))
-                            #     print(language.prettify(corrupted_input_ids))
-                            #     for l in [intervened_top_5, corrupted_top_5, original_top_5]:
-                            #         for i in range(5):
-                            #             print(f"{language.id_to_token[l.indices[i].item()]:>5}: {l.values[i]:.5f}")
-                            #         print('---')
-                            #     input()
-
                             kl_div = torch.nn.functional.kl_div(intervened_probs, corrupted_probs, log_target=True, reduction="batchmean")
                             intervened_prob = intervened_probs.exp()[orig_output]
                             corrupted_prob = corrupted_probs.exp()[orig_output]

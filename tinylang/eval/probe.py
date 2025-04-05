@@ -53,7 +53,9 @@ class ProbeEvaluator(Evaluator):
 
     @ignore_warnings(category=Warning)
     def post_eval(self, step: int):
+        probe_weights = defaultdict(list)
         for subset in self.activations[step]:
+            layer, type, label_type, query = subset.split(".")
             activations = torch.stack(self.activations[step][subset]).cpu().detach() # shape: (n, d)
             labels = torch.tensor(self.labels[step][subset]).cpu().detach() # shape: (n,)
 
@@ -62,6 +64,11 @@ class ProbeEvaluator(Evaluator):
             lr = LogisticRegression(random_state=0, max_iter=1000, l1_ratio=0.5,
                     fit_intercept=True, C=1.0,
                     penalty=None, solver="saga").fit(activations[:train_len], labels[:train_len])
+            probe_weights[(layer, type, query)].append({
+                "coef": torch.tensor(lr.coef_),
+                "intercept": torch.tensor(lr.intercept_),
+                "label_type": label_type,
+            })
                             
             # get eval set accuracy
             preds = lr.predict(activations[train_len:])
@@ -91,24 +98,56 @@ class ProbeEvaluator(Evaluator):
             #     print(f"{subset:>40} (MLP): {acc:.4%}")
             #     self.all_eval_stats[step][f"{subset}.mlp_acc"].append(acc)
 
+        # compare similarity of probe weights
+        for key in probe_weights:
+            coefs = [x["coef"] for x in probe_weights[key]]
+            for i in range(len(coefs)):
+                label_i = probe_weights[key][i]["label_type"]   
+                for j in range(i + 1, len(coefs)):
+                    label_j = probe_weights[key][j]["label_type"]
+                    diff = (coefs[i] - coefs[j]).norm().item()
+                    per_row_cosine_sim = torch.nn.functional.cosine_similarity(coefs[i], coefs[j], dim=1)
+                    self.all_eval_stats[step][f"{'.'.join(key)}.{label_i}.{label_j}.diff"].append(diff)
+                    self.all_eval_stats[step][f"{'.'.join(key)}.{label_i}.{label_j}.cosine_sim"].append(per_row_cosine_sim.mean().item())
+
     def plot(self, log_dir: str):
         df = self.df
-        df = df.groupby(["step", "variable"]).mean().reset_index()
+        df_all = df.groupby(["step", "variable"]).mean().reset_index()
+
+        df = df_all[df_all["variable"].str.endswith(".acc")]
         df["layer"] = df["variable"].str.split(".").str[0]
         df["type"] = df["variable"].str.split(".").str[1]
         df["label_type"] = df["variable"].str.split(".").str[2]
         df["query"] = df["variable"].str.split(".").str[3]
-        df["variable"] = df["variable"].str.split(".").str[4]
 
         # make plot
         for type in df["type"].unique():
-            for variable in df["variable"].unique():
-                df_subset = df[df["type"] == type]
-                df_subset = df_subset[df_subset["variable"] == variable]
+            df_subset = df[df["type"] == type]
+            plot = (
+                p9.ggplot(df_subset, p9.aes(x="step", y="value", color="query"))
+                + p9.geom_line()
+                + p9.facet_grid("label_type~layer")
+            )
+            plot.save(f"{log_dir}/{str(self)}.{type}.acc.png")
+
+        df = df_all[df_all["variable"].str.endswith(".diff") | df_all["variable"].str.endswith(".cosine_sim")]
+        df["layer"] = df["variable"].str.split(".").str[0]
+        df["type"] = df["variable"].str.split(".").str[1]
+        df["query"] = df["variable"].str.split(".").str[2]
+        df["label_i"] = df["variable"].str.split(".").str[3]
+        df["label_j"] = df["variable"].str.split(".").str[4]
+        df["var"] = df["variable"].str.split(".").str[5]
+
+        # make plot
+        for var in df["var"].unique():
+            for type in df["type"].unique():
+                df_subset = df[df["var"] == var]
+                df_subset = df_subset[df_subset["type"] == type]
                 plot = (
-                    p9.ggplot(df_subset, p9.aes(x="step", y="value", color="query"))
+                    p9.ggplot(df_subset, p9.aes(x="step", y="value", color="label_i + label_j"))
                     + p9.geom_line()
-                    + p9.facet_grid("label_type~layer")
+                    + p9.facet_grid("layer~query")
+                    + (p9.scale_y_log10() if var == "diff" else p9.scale_y_continuous())
                 )
-                plot.save(f"{log_dir}/{str(self)}.{type}.{variable}.png")
+                plot.save(f"{log_dir}/{str(self)}.{type}.{var}.png")
             
