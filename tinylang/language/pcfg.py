@@ -60,8 +60,15 @@ class PCFG(Language):
         self.max_depth = max_depth
         self.head_position = head_position
         self.mask_nonquery = mask_nonquery
+
+        # which queries are disabled?
         self.no_sibling_queries = no_sibling_queries
         self.no_child_queries = no_child_queries
+        self.acceptable_query_types = [QueryType.PARENT]
+        if not self.no_child_queries:
+            self.acceptable_query_types.append(QueryType.CHILD)
+        if not self.no_sibling_queries:
+            self.acceptable_query_types.append(QueryType.SIBLING)
         self.no_start_queries = no_start_queries
         
         # make the terminals and nonterminals
@@ -173,6 +180,17 @@ class PCFG(Language):
 
         return generated
     
+    def is_relation(self, sentence: list[Node], relation: QueryType, i: int, j: int) -> bool:
+        """Check if the relation holds between the nodes at positions i and j."""
+        if relation == QueryType.PARENT:
+            return sentence[i].head_id == sentence[j].id
+        elif relation == QueryType.CHILD:
+            return sentence[i].id == sentence[j].head_id
+        elif relation == QueryType.SIBLING:
+            return sentence[i].head_id == sentence[j].head_id and i != j
+        else:
+            raise ValueError(f"Invalid query type: {relation}")
+        
     def sample(self):
         """Generate a document from the PCFG, i.e. a sentence, a query, and a response."""
         sentence = None
@@ -189,65 +207,49 @@ class PCFG(Language):
             # check if any eligible positions are left
             eligible_pos = list(range(len(sentence)))
             if self.no_child_queries and self.no_sibling_queries: # must be a parent query
-                if self.head_position == "left":
-                    if self.no_start_queries:
-                        eligible_pos = [i for i in eligible_pos[1:] if sentence[i].head_id != sentence[0].id]
-                    else:
-                        eligible_pos = eligible_pos[1:]
-                elif self.head_position == "right":
-                    if self.no_start_queries:
-                        eligible_pos = [i for i in eligible_pos[:-1] if sentence[i].head_id != sentence[-1].id]
-                    else:
-                        eligible_pos = eligible_pos[:-1]
+                all_heads = set([x.head_id for x in sentence])
+                eligible_pos = [i for i in eligible_pos if sentence[i].id in all_heads]
             if len(eligible_pos) == 0:
                 sentence = None
 
-        # queries are only parent, child #n, and sibling #n
-        # we uniformly sample the item we want to ask the query about, and then sample the query type
-        # TODO: wtf should we do about duplicate terminals?
-        # TODO: diff query distribution?
-        # TODO: order
-        # TODO: this code is so sus, how do we handle path length > 1 (we will have to eventually)
+        # we first uniformly sample the target item, this way the target distribution is uniform
+        # models cannot easily cheat by predicting some likely targets!
+        target_item = np.random.choice(eligible_pos)
+        target_item_pos = 1 + target_item
 
-        query_item = np.random.choice(eligible_pos)
-        query_item_pos = 1 + query_item
-
-        # generate the possible targets for each query type
-        possible_queries_and_targets = {
-            QueryType.PARENT: [i for i in range(len(sentence)) if sentence[i].id == sentence[query_item].head_id],
-            QueryType.CHILD: [i for i in range(len(sentence)) if sentence[i].head_id == sentence[query_item].id] if not self.no_child_queries else [],
-            QueryType.SIBLING: [i for i in range(len(sentence)) if (sentence[i].head_id == sentence[query_item].head_id and i != query_item)] if not self.no_sibling_queries else []
-        }
+        # generate the possible queries leading to the target item
+        possible_queries_and_targets = {}
+        for query_type in self.acceptable_query_types:
+            possible_queries_and_targets[query_type] = [i for i in range(len(sentence)) if self.is_relation(sentence, query_type, i, target_item)]
         tokens = [self.BOS] + [int(x.label[1:]) + self.TERMINAL_START for x in sentence]
-        # print(self.prettify(tokens))
-        # print("    ", sentence[query_item])
-        # for k, v in possible_queries_and_targets.items():
-        #     print("    ", k.name, [sentence[i] for i in v])
-        # input()
 
-        query_item = int(sentence[query_item].label[1:]) + self.TERMINAL_START
+        # get target item token
+        target_item = int(sentence[target_item].label[1:]) + self.TERMINAL_START
 
         # sample a query type
         acceptable_query_types = [q for q in possible_queries_and_targets if len(possible_queries_and_targets[q]) > 0]
         query_type = np.random.choice(acceptable_query_types)
 
+        # sample a query item
+        query_item = np.random.choice(possible_queries_and_targets[query_type])
+        query_item_pos = 1 + query_item
+
         # get the target distribution
         target_distribution = np.zeros(self.vocab_size)
         all_target_pos = []
-        for item in possible_queries_and_targets[query_type]:
+        for item in range(len(sentence)):
+            if not self.is_relation(sentence, query_type, query_item, item):
+                continue
             tok = int(sentence[item].label[1:]) + self.TERMINAL_START
             target_distribution[tok] += 1
             all_target_pos.append(1 + item)
         target_distribution = target_distribution / np.sum(target_distribution)
 
         # sample a target item
-        target_item = np.random.choice(possible_queries_and_targets[query_type])
-        target_item_pos = 1 + target_item
-        target_item = int(sentence[target_item].label[1:]) + self.TERMINAL_START
+        query_item = int(sentence[query_item].label[1:]) + self.TERMINAL_START
 
         # generate the overall sequence to train on
-        only_parent_queries = self.no_child_queries and self.no_sibling_queries
-        if only_parent_queries:
+        if len(self.acceptable_query_types) == 1:
             query = [query_item, target_item]
         else:
             query = [query_item, query_type + self.QUERY_START, target_item]
@@ -258,28 +260,25 @@ class PCFG(Language):
             "type": QueryType(query_type).name,
             "keys": {
                 "query_item": [len(tokens) - 1 - len(query)],
-                "query_type": [len(tokens) - 1 - len(query) + 1] if not only_parent_queries else [0],
-                "target_item": [len(tokens) - 1 - len(query) + (2 if not only_parent_queries else 1)],
-                "_target_item_orig": [target_item_pos],
+                "query_type": [len(tokens) - 1 - len(query) + 1] if len(self.acceptable_query_types) != 1 else [0],
+                "target_item": [len(tokens) - 1 - len(query) + (2 if len(self.acceptable_query_types) != 1 else 1)],
+                "target_item_orig": [target_item_pos],
                 "query_item_orig": [query_item_pos],
                 "divider": [len(tokens) - 1 - len(query) - 1],
-                "_all_target_items_orig": all_target_pos,
-                "children": [1 + i for i in possible_queries_and_targets[QueryType.CHILD]],
-                "siblings": [1 + i for i in possible_queries_and_targets[QueryType.SIBLING]],
-                "parent": [1 + i for i in possible_queries_and_targets[QueryType.PARENT]],
+                "all_target_items_orig": all_target_pos,
                 "bos": [0],
             },
             "queries": {
                 "query_item": {
                     "pos": len(tokens) - 1 - len(query),
-                    "target_distribution": None if not only_parent_queries else torch.tensor(target_distribution),
+                    "target_distribution": None if len(self.acceptable_query_types) != 1 else torch.tensor(target_distribution),
                 },
                 "query_type": {
                     "pos": len(tokens) - 1 - len(query) + 1,
                     "target_distribution": torch.tensor(target_distribution),
                 },
                 "target_item": {
-                    "pos": len(tokens) - 1 - len(query) + (2 if not only_parent_queries else 1),
+                    "pos": len(tokens) - 1 - len(query) + (2 if len(self.acceptable_query_types) != 1 else 1),
                     "target_distribution": None,
                 },
                 "query_item_orig": {
@@ -301,7 +300,7 @@ class PCFG(Language):
             }
         }
 
-        if only_parent_queries:
+        if len(self.acceptable_query_types) == 1:
             del probing_schema["queries"]["query_type"]
         
         return tokens, probing_schema
