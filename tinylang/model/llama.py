@@ -12,6 +12,7 @@ class Llama(Model):
         n_head: int,
         n_inner: int | None = None,
         device: torch.device | None = None,
+        rope_theta: float = 10000.0,
     ):
         # initialize the model
         self.config = LlamaConfig(
@@ -25,6 +26,7 @@ class Llama(Model):
             max_position_embeddings=n_positions,
             output_hidden_states=True,
             output_attentions=True,
+            rope_theta=rope_theta,
         )
         self.model = LlamaForCausalLM(self.config).to(device)
 
