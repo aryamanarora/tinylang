@@ -12,6 +12,7 @@ class AR(Language):
         self,
         num_kv: int,
         max_length: int,
+        min_length: int=2,
         query_type: str="key",
         mask_nonquery: bool=False,
     ):
@@ -20,6 +21,7 @@ class AR(Language):
         assert query_type in ["key", "value"]
         self.num_kv = num_kv
         self.max_length = max_length
+        self.min_length = min_length
         self.query_type = query_type
         self.mask_nonquery = mask_nonquery
 
@@ -54,7 +56,7 @@ class AR(Language):
     
     def sample(self):
         """Generate a random sentence from the AR."""
-        num_sample = random.randint(1, self.max_length // 2)
+        num_sample = random.randint(self.min_length // 2, self.max_length // 2)
         keys = list(range(self.num_kv // 2))
         values = list(range(self.num_kv // 2, self.num_kv))
         random.shuffle(keys)
