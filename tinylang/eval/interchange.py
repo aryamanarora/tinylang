@@ -25,9 +25,8 @@ class InterchangeEvaluator(Evaluator):
         hidden_states = outputs["hidden_states"]
         types = set([x["type"] for x in probing_schemas])
         
-        for component in ["attention_input", "attention_output"]:
+        for component in ["attention_input", "attention_output", "block_output"]:
             for layer in range(1, len(hidden_states)):
-                
                 true_layer = layer - 1
                 config = {"layer": true_layer, "component": component, "unit": "pos"}
                 pv_config = pv.IntervenableConfig(config)
