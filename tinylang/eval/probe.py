@@ -238,6 +238,7 @@ class ProbeEvaluator(Evaluator):
                                         + p9.geom_tile()
                                         + p9.facet_grid("label_i~label_j")
                                         + p9.labs(title=f"{layer}.{type}.{query}.{label_i}.{label_j}.{step} (avg acc: {probe_acc:.4%})")
+                                        + p9.scale_fill_gradient(low="blue", high="red", limits=[-1, 1] if metric == "cos_sim" else None)
                                     )
                                     frame.save(f"{frames_dir}/{str(self)}.{layer}.{type}.{query}.{label_i}.{label_j}.{step}.png")
 
