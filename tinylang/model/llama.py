@@ -29,6 +29,7 @@ class Llama(Model):
             rope_theta=rope_theta,
         )
         self.model = LlamaForCausalLM(self.config).to(device)
+        self.model.init_weights()
 
         # print model size
         print(f"Model size: {sum(p.numel() for p in self.model.parameters())}")

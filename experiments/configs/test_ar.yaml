@@ -1,5 +1,5 @@
 model:
-  class: "Llama"
+  class: "GPT2"
   config:
     n_positions: 1024
     n_embd: 128 # n_inner is 4x by default

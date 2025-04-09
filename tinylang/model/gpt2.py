@@ -32,6 +32,7 @@ class GPT2(Model):
             output_attentions=True,
         )
         self.model = GPT2LMHeadModel(self.config).to(device)
+        self.model.init_weights()
 
         # print model size
         print(f"Model size: {sum(p.numel() for p in self.model.parameters())}")
