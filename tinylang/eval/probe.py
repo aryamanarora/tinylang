@@ -13,6 +13,7 @@ import os
 import imageio
 import pandas as pd
 from sklearn.decomposition import PCA
+import io
 
 
 class MLPProbe(nn.Module):
@@ -185,6 +186,7 @@ class ProbeEvaluator(Evaluator):
                     for type in df_coef["type"].unique():
                         for query in df_coef["query"].unique():
                             df_subset = df_coef[(df_coef["layer"] == layer) & (df_coef["type"] == type) & (df_coef["query"] == query)]
+                            frames = []
                             for step in df_coef["step"].unique():
                                 df_subset_step = df_subset[df_subset["step"] == step]
                                 vectors_step = torch.cat(df_subset_step["value"].tolist(), dim=0).cpu().detach()
@@ -200,12 +202,15 @@ class ProbeEvaluator(Evaluator):
                                 min_y, max_y = model["min_y"], model["max_y"]
                                 probe_acc = df_acc[(df_acc["layer"] == layer) & (df_acc["type"] == type) & (df_acc["query"] == query) & (df_acc["step"] == step)]["value"].mean()
                                 frame = p9.ggplot(vectors_step, p9.aes(x="x", y="y", color="label_i")) + p9.geom_point() + p9.labs(title=f"{layer}.{type}.{query}.{step} (avg acc: {probe_acc:.4%})") + p9.xlim((min_x, max_x)) + p9.ylim((min_y, max_y))
-                                frame.save(f"{frames_dir}/{str(self)}.{model_name}.{layer}.{type}.{query}.{step}.png")
+                                
+                                # Convert plot to image in memory
+                                buf = io.BytesIO()
+                                frame.save(buf, format="png")
+                                buf.seek(0)
+                                frames.append(imageio.imread(buf))
                             
                             # make gif
-                            frames = [imageio.imread(f"{frames_dir}/{str(self)}.{model_name}.{layer}.{type}.{query}.{step}.png") 
-                                    for step in df_coef["step"].unique()]
-                            imageio.mimsave(f"{gifs_dir}/{str(self)}.{model_name}.{layer}.{type}.{query}.gif", frames, duration=0.1)
+                            imageio.mimsave(f"{gifs_dir}/{str(self)}.{model_name}.{layer}.{type}.{query}.gif", frames, duration=0.2)
 
         # make plot
         for type in df_acc["type"].unique():
@@ -239,6 +244,7 @@ class ProbeEvaluator(Evaluator):
                         for query in df_sim["query"].unique():
                             for label_i in df_sim["label_i"].unique():
                                 for label_j in df_sim["label_j"].unique():
+                                    frames = []
                                     for step in df_sim["step"].unique():
                                         subset = df_sim[(df_sim["layer"] == layer) & (df_sim["type"] == type) & (df_sim["query"] == query) & (df_sim["label_i"] == label_i) & (df_sim["label_j"] == label_j) & (df_sim["step"] == step)]
                                         probe_acc = df_acc[(df_acc["layer"] == layer) & (df_acc["type"] == type) & (df_acc["query"] == query) & (df_acc["step"] == step)]["value"].mean()
@@ -253,9 +259,12 @@ class ProbeEvaluator(Evaluator):
                                             frame += p9.geom_text(p9.aes(label="value_text"), size=5)
                                         else:
                                             frame += p9.scale_fill_gradient(low="white", high="purple")
-                                        frame.save(f"{frames_dir}/{str(self)}.{layer}.{type}.{query}.{label_i}.{label_j}.{step}.png")
+                                        
+                                        # Convert plot to image in memory
+                                        buf = io.BytesIO()
+                                        frame.save(buf, format="png")
+                                        buf.seek(0)
+                                        frames.append(imageio.imread(buf))
 
-                                # make gif
-                                frames = [imageio.imread(f"{frames_dir}/{str(self)}.{layer}.{type}.{query}.{label_i}.{label_j}.{step}.png") 
-                                        for step in df_sim["step"].unique()]
-                                imageio.mimsave(f"{gifs_dir}/{str(self)}.{metric}.{layer}.{type}.{query}.{label_i}.{label_j}.gif", frames, duration=0.1)
+                                    # make gif
+                                    imageio.mimsave(f"{gifs_dir}/{str(self)}.{metric}.{layer}.{type}.{query}.{label_i}.{label_j}.gif", frames, duration=0.2)
