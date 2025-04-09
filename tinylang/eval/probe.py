@@ -31,10 +31,14 @@ class ProbeEvaluator(Evaluator):
     def __str__(self):
         return "ProbeEvaluator"
 
-    def __init__(self, run_every_n_steps: int):
+    def __init__(self, run_every_n_steps: int, do_dim_reduction: bool = True, do_sim: bool = True):
         super().__init__(run_every_n_steps)
+
         self.activations = defaultdict(lambda: defaultdict(list))
         self.labels = defaultdict(lambda: defaultdict(list))
+
+        self.do_dim_reduction = do_dim_reduction
+        self.do_sim = do_sim
 
     def eval(self, model: Model, language: Language, inputs: dict, outputs: dict, step: int):
         probing_schemas = inputs["probing_schemas"]
@@ -78,7 +82,7 @@ class ProbeEvaluator(Evaluator):
             # get eval set accuracy
             preds = lr.predict(activations[train_len:])
             acc = ((preds == labels[train_len:]).sum() / len(preds)).item()
-            print(f"{subset:>40}: {acc:.4%}")
+            # print(f"{subset:>40}: {acc:.4%}")
             self.all_eval_stats[step][f"{subset}.acc"].append(acc)
 
             # # now do MLP probe
@@ -104,30 +108,31 @@ class ProbeEvaluator(Evaluator):
             #     self.all_eval_stats[step][f"{subset}.mlp_acc"].append(acc)
 
         # compare similarity of probe weights
-        for key in probe_weights:
-            coefs = [x["coef"] for x in probe_weights[key]]
-            for i in range(len(coefs)):
-                label_i = probe_weights[key][i]["label_type"] 
-                self.all_eval_stats[step][f"{'.'.join(key)}.{label_i}.coef"].append(coefs[i])
-                for j in range(i + 1, len(coefs)):
-                    label_j = probe_weights[key][j]["label_type"]
-                    for u in range(len(coefs[i]) + len(coefs[j])):
-                        for v in range(u, len(coefs[i]) + len(coefs[j])):
-                            first, label_first = (coefs[i][u], label_i[0]) if u < len(coefs[i]) else (coefs[j][u - len(coefs[i])], label_j[0])
-                            second, label_second = (coefs[i][v], label_i[0]) if v < len(coefs[i]) else (coefs[j][v - len(coefs[i])], label_j[0])
-                            v_real = v - len(coefs[i]) if v >= len(coefs[i]) else v
-                            u_real = u - len(coefs[i]) if u >= len(coefs[i]) else u
-                            labels = [
-                                f"{'.'.join(key)}.{label_i}.{label_j}.{label_first}{u_real}.{label_second}{v_real}",
-                                f"{'.'.join(key)}.{label_i}.{label_j}.{label_second}{v_real}.{label_first}{u_real}",
-                            ]
-                            metrics = {
-                                "cos_sim": torch.nn.functional.cosine_similarity(first, second, dim=0).item(),
-                                "dot_prod": torch.dot(first, second).item(),
-                            }
-                            for label in set(labels):
-                                for metric in metrics:
-                                    self.all_eval_stats[step][f"{label}.{metric}"].append(metrics[metric])
+        if self.do_sim:
+            for key in probe_weights:
+                coefs = [x["coef"] for x in probe_weights[key]]
+                for i in range(len(coefs)):
+                    label_i = probe_weights[key][i]["label_type"] 
+                    self.all_eval_stats[step][f"{'.'.join(key)}.{label_i}.coef"].append(coefs[i])
+                    for j in range(i + 1, len(coefs)):
+                        label_j = probe_weights[key][j]["label_type"]
+                        for u in range(len(coefs[i]) + len(coefs[j])):
+                            for v in range(u, len(coefs[i]) + len(coefs[j])):
+                                first, label_first = (coefs[i][u], label_i[0]) if u < len(coefs[i]) else (coefs[j][u - len(coefs[i])], label_j[0])
+                                second, label_second = (coefs[i][v], label_i[0]) if v < len(coefs[i]) else (coefs[j][v - len(coefs[i])], label_j[0])
+                                v_real = v - len(coefs[i]) if v >= len(coefs[i]) else v
+                                u_real = u - len(coefs[i]) if u >= len(coefs[i]) else u
+                                labels = [
+                                    f"{'.'.join(key)}.{label_i}.{label_j}.{label_first}{u_real}.{label_second}{v_real}",
+                                    f"{'.'.join(key)}.{label_i}.{label_j}.{label_second}{v_real}.{label_first}{u_real}",
+                                ]
+                                metrics = {
+                                    "cos_sim": torch.nn.functional.cosine_similarity(first, second, dim=0).item(),
+                                    "dot_prod": torch.dot(first, second).item(),
+                                }
+                                for label in set(labels):
+                                    for metric in metrics:
+                                        self.all_eval_stats[step][f"{label}.{metric}"].append(metrics[metric])
 
     def plot(self, log_dir: str):
         df = self.df
@@ -167,38 +172,40 @@ class ProbeEvaluator(Evaluator):
             })
 
         # make gif of umap of coefs
-        frames_dir = f"{log_dir}/frames"
-        gifs_dir = f"{log_dir}/gifs"
-
-        for model in model_res:
-            model_name = model["model_name"]
+        if self.do_dim_reduction or self.do_sim:
+            frames_dir = f"{log_dir}/frames"
+            gifs_dir = f"{log_dir}/gifs"
             os.makedirs(frames_dir, exist_ok=True)
             os.makedirs(gifs_dir, exist_ok=True)
-            for layer in df_coef["layer"].unique():
-                for type in df_coef["type"].unique():
-                    for query in df_coef["query"].unique():
-                        df_subset = df_coef[(df_coef["layer"] == layer) & (df_coef["type"] == type) & (df_coef["query"] == query)]
-                        for step in df_coef["step"].unique():
-                            df_subset_step = df_subset[df_subset["step"] == step]
-                            vectors_step = torch.cat(df_subset_step["value"].tolist(), dim=0).cpu().detach()
-                            vectors_labels = []
-                            for label_i in df_subset_step["label_i"].unique():
-                                vectors_labels.extend([label_i] * len(torch.cat(df_subset_step[df_subset_step["label_i"] == label_i]["value"].tolist(), dim=0)))
-                            vectors_step = model["model"].transform(vectors_step)
-                            vectors_step = pd.DataFrame(vectors_step, columns=["x", "y"])
-                            vectors_step["label_i"] = vectors_labels
 
-                            # make umap of coefs
-                            min_x, max_x = model["min_x"], model["max_x"]
-                            min_y, max_y = model["min_y"], model["max_y"]
-                            probe_acc = df_acc[(df_acc["layer"] == layer) & (df_acc["type"] == type) & (df_acc["query"] == query) & (df_acc["step"] == step)]["value"].mean()
-                            frame = p9.ggplot(vectors_step, p9.aes(x="x", y="y", color="label_i")) + p9.geom_point() + p9.labs(title=f"{layer}.{type}.{query}.{step} (avg acc: {probe_acc:.4%})") + p9.xlim((min_x, max_x)) + p9.ylim((min_y, max_y))
-                            frame.save(f"{frames_dir}/{str(self)}.{model_name}.{layer}.{type}.{query}.{step}.png")
-                        
-                        # make gif
-                        frames = [imageio.imread(f"{frames_dir}/{str(self)}.{model_name}.{layer}.{type}.{query}.{step}.png") 
-                                for step in df_coef["step"].unique()]
-                        imageio.mimsave(f"{gifs_dir}/{str(self)}.{model_name}.{layer}.{type}.{query}.gif", frames, duration=0.1)
+        if self.do_dim_reduction:
+            for model in model_res:
+                model_name = model["model_name"]
+                for layer in df_coef["layer"].unique():
+                    for type in df_coef["type"].unique():
+                        for query in df_coef["query"].unique():
+                            df_subset = df_coef[(df_coef["layer"] == layer) & (df_coef["type"] == type) & (df_coef["query"] == query)]
+                            for step in df_coef["step"].unique():
+                                df_subset_step = df_subset[df_subset["step"] == step]
+                                vectors_step = torch.cat(df_subset_step["value"].tolist(), dim=0).cpu().detach()
+                                vectors_labels = []
+                                for label_i in df_subset_step["label_i"].unique():
+                                    vectors_labels.extend([label_i] * len(torch.cat(df_subset_step[df_subset_step["label_i"] == label_i]["value"].tolist(), dim=0)))
+                                vectors_step = model["model"].transform(vectors_step)
+                                vectors_step = pd.DataFrame(vectors_step, columns=["x", "y"])
+                                vectors_step["label_i"] = vectors_labels
+
+                                # make umap of coefs
+                                min_x, max_x = model["min_x"], model["max_x"]
+                                min_y, max_y = model["min_y"], model["max_y"]
+                                probe_acc = df_acc[(df_acc["layer"] == layer) & (df_acc["type"] == type) & (df_acc["query"] == query) & (df_acc["step"] == step)]["value"].mean()
+                                frame = p9.ggplot(vectors_step, p9.aes(x="x", y="y", color="label_i")) + p9.geom_point() + p9.labs(title=f"{layer}.{type}.{query}.{step} (avg acc: {probe_acc:.4%})") + p9.xlim((min_x, max_x)) + p9.ylim((min_y, max_y))
+                                frame.save(f"{frames_dir}/{str(self)}.{model_name}.{layer}.{type}.{query}.{step}.png")
+                            
+                            # make gif
+                            frames = [imageio.imread(f"{frames_dir}/{str(self)}.{model_name}.{layer}.{type}.{query}.{step}.png") 
+                                    for step in df_coef["step"].unique()]
+                            imageio.mimsave(f"{gifs_dir}/{str(self)}.{model_name}.{layer}.{type}.{query}.gif", frames, duration=0.1)
 
         # make plot
         for type in df_acc["type"].unique():
@@ -211,38 +218,44 @@ class ProbeEvaluator(Evaluator):
             plot.save(f"{log_dir}/{str(self)}.{type}.acc.png")
 
 
-        for metric in ["cos_sim", "dot_prod"]:
-            # probe difference/similarity comparisons
-            df_sim = df_all[df_all["variable"].str.endswith(f".{metric}")]
-            df_sim["layer"] = df_sim["variable"].str.split(".").str[0]
-            df_sim["type"] = df_sim["variable"].str.split(".").str[1]
-            df_sim["query"] = df_sim["variable"].str.split(".").str[2]
-            df_sim["label_i"] = df_sim["variable"].str.split(".").str[3]
-            df_sim["label_j"] = df_sim["variable"].str.split(".").str[4]
-            df_sim["a"] = df_sim["variable"].str.split(".").str[5]
-            df_sim["b"] = df_sim["variable"].str.split(".").str[6]
-            df_sim["var"] = df_sim["variable"].str.split(".").str[7]
-            df_sim["value"] = df_sim["value"].astype(float)
+        if self.do_sim:
+            for metric in ["cos_sim", "dot_prod"]:
+                # probe difference/similarity comparisons
+                df_sim = df_all[df_all["variable"].str.endswith(f".{metric}")]
+                df_sim["layer"] = df_sim["variable"].str.split(".").str[0]
+                df_sim["type"] = df_sim["variable"].str.split(".").str[1]
+                df_sim["query"] = df_sim["variable"].str.split(".").str[2]
+                df_sim["label_i"] = df_sim["variable"].str.split(".").str[3]
+                df_sim["label_j"] = df_sim["variable"].str.split(".").str[4]
+                df_sim["a"] = df_sim["variable"].str.split(".").str[5]
+                df_sim["b"] = df_sim["variable"].str.split(".").str[6]
+                df_sim["var"] = df_sim["variable"].str.split(".").str[7]
+                df_sim["value"] = df_sim["value"].astype(float)
+                df_sim["value_text"] = df_sim["value"].apply(lambda x: f"{x:.2f}" if x != 0 else "0.00")
 
-            # make plot
-            for layer in df_sim["layer"].unique():
-                for type in df_sim["type"].unique():
-                    for query in df_sim["query"].unique():
-                        for label_i in df_sim["label_i"].unique():
-                            for label_j in df_sim["label_j"].unique():
-                                for step in df_sim["step"].unique():
-                                    subset = df_sim[(df_sim["layer"] == layer) & (df_sim["type"] == type) & (df_sim["query"] == query) & (df_sim["label_i"] == label_i) & (df_sim["label_j"] == label_j) & (df_sim["step"] == step)]
-                                    probe_acc = df_acc[(df_acc["layer"] == layer) & (df_acc["type"] == type) & (df_acc["query"] == query) & (df_acc["step"] == step)]["value"].mean()
-                                    frame = (
-                                        p9.ggplot(subset, p9.aes(x="a", y="b", fill="value"))
-                                        + p9.geom_tile()
-                                        + p9.facet_grid("label_i~label_j")
-                                        + p9.labs(title=f"{layer}.{type}.{query}.{label_i}.{label_j}.{step} (avg acc: {probe_acc:.4%})")
-                                        + p9.scale_fill_gradient(low="blue", high="red", limits=[-1, 1] if metric == "cos_sim" else None)
-                                    )
-                                    frame.save(f"{frames_dir}/{str(self)}.{layer}.{type}.{query}.{label_i}.{label_j}.{step}.png")
+                # make plot
+                for layer in df_sim["layer"].unique():
+                    for type in df_sim["type"].unique():
+                        for query in df_sim["query"].unique():
+                            for label_i in df_sim["label_i"].unique():
+                                for label_j in df_sim["label_j"].unique():
+                                    for step in df_sim["step"].unique():
+                                        subset = df_sim[(df_sim["layer"] == layer) & (df_sim["type"] == type) & (df_sim["query"] == query) & (df_sim["label_i"] == label_i) & (df_sim["label_j"] == label_j) & (df_sim["step"] == step)]
+                                        probe_acc = df_acc[(df_acc["layer"] == layer) & (df_acc["type"] == type) & (df_acc["query"] == query) & (df_acc["step"] == step)]["value"].mean()
+                                        frame = (
+                                            p9.ggplot(subset, p9.aes(x="a", y="b", fill="value"))
+                                            + p9.geom_tile()
+                                            + p9.facet_grid("label_i~label_j")
+                                            + p9.labs(title=f"{layer}.{type}.{query}.{label_i}.{label_j}.{step} (avg acc: {probe_acc:.4%})")
+                                        )
+                                        if metric == "cos_sim":
+                                            frame += p9.scale_fill_gradient2(low="blue", mid="white", high="red", midpoint=0, limits=[-1, 1])
+                                            frame += p9.geom_text(p9.aes(label="value_text"), size=5)
+                                        else:
+                                            frame += p9.scale_fill_gradient(low="white", high="purple")
+                                        frame.save(f"{frames_dir}/{str(self)}.{layer}.{type}.{query}.{label_i}.{label_j}.{step}.png")
 
-                            # make gif
-                            frames = [imageio.imread(f"{frames_dir}/{str(self)}.{layer}.{type}.{query}.{label_i}.{label_j}.{step}.png") 
-                                    for step in df_sim["step"].unique()]
-                            imageio.mimsave(f"{gifs_dir}/{str(self)}.{metric}.{layer}.{type}.{query}.{label_i}.{label_j}.gif", frames, duration=0.1)
+                                # make gif
+                                frames = [imageio.imread(f"{frames_dir}/{str(self)}.{layer}.{type}.{query}.{label_i}.{label_j}.{step}.png") 
+                                        for step in df_sim["step"].unique()]
+                                imageio.mimsave(f"{gifs_dir}/{str(self)}.{metric}.{layer}.{type}.{query}.{label_i}.{label_j}.gif", frames, duration=0.1)

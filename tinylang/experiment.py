@@ -168,7 +168,7 @@ class Experiment:
                     evaluator.eval(self.model, self.language, inputs, outputs, step=step)
 
         # run all evaluators
-        for evaluator in self.evaluators:
+        for evaluator in tqdm(self.evaluators, desc="Post-evals") if self.verbose else self.evaluators:
             if step % evaluator.run_every_n_steps == 0:
                 evaluator.post_eval(step=step)
                 # print(torch.cuda.memory_stats(device=self.model.model.device)["allocated_bytes.all.peak"])
