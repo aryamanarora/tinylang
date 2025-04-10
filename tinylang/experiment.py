@@ -58,6 +58,10 @@ class Experiment:
         # set up log dir
         os.makedirs(self.training_config.log_dir, exist_ok=True)
 
+        # print model size
+        if self.verbose:
+            print(f"Model size: {sum(p.numel() for p in self.model.model.parameters())}")
+
 
     @classmethod
     def from_config(cls, config: dict):

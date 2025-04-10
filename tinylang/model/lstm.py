@@ -36,9 +36,6 @@ class LSTM(Model):
         
         # Move to device
         self.model.to(self.device)
-        
-        # Print model size
-        print(f"Model size: {sum(p.numel() for p in self.model.parameters())}")
     
     def step(self, input_ids: torch.Tensor, labels: torch.Tensor):
         """Run a single step.

@@ -33,9 +33,6 @@ class GPT2(Model):
         )
         self.model = GPT2LMHeadModel(self.config).to(device)
         self.model.init_weights()
-
-        # print model size
-        print(f"Model size: {sum(p.numel() for p in self.model.parameters())}")
     
     def step(self, input_ids: torch.Tensor, labels: torch.Tensor):
         """Run a single step.

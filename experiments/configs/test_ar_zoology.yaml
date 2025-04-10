@@ -1,0 +1,42 @@
+model:
+  class: "Zoology"
+  config:
+    n_positions: 1024
+    n_embd: 128 # n_inner is 4x by default
+    n_layer: 4
+    n_head: 4
+    mixer_type: "hyena"
+    # rope_theta: 1000.0
+language:
+  class: "PCFG"
+  config:
+    num_terminals: 20
+    num_nonterminals: 10
+    max_rhs_len: 10
+    max_rules_per_nt: 5
+    max_depth: 10
+    head_position: "left"
+    mask_nonquery: True
+    no_sibling_queries: True
+    no_child_queries: True
+evaluators:
+  - class: "SummaryEvaluator"
+    config:
+      run_every_n_steps: 200
+  # - class: "AttentionEvaluator"
+  #   config:
+  #     run_every_n_steps: 200
+  # - class: "ProbeEvaluator"
+  #   config:
+  #     run_every_n_steps: 200
+  #     do_dim_reduction: False
+  #     do_sim: True
+  # - class: "InterchangeEvaluator"
+  #   config:
+  #     run_every_n_steps: 200
+training:
+  train_batch_size: 16
+  num_train_steps: 30000
+  eval_batch_size: 64
+  num_eval_steps: 2
+  lr: 1e-4
