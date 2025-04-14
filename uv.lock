@@ -4257,7 +4257,7 @@ wheels = [
 [[package]]
 name = "zoology"
 version = "0.0.1"
-source = { git = "https://github.com/aryamanarora/zoology.git#0441d48742cc3daacd31038f422e142e68fbc515" }
+source = { git = "https://github.com/aryamanarora/zoology.git#102a8cf2a52d31a007d9847981a36d1b13bb876e" }
 dependencies = [
     { name = "causal-conv1d" },
     { name = "click" },

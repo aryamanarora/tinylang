@@ -13,8 +13,7 @@ def main():
 
     # get parent of folder that config is in
     filename = os.path.basename(args.config)
-    config_dir = os.path.dirname(args.config)
-    parent_dir = os.path.dirname(config_dir)
+    parent_dir = "experiments/"
 
     # Load config
     with open(args.config, 'r') as f:

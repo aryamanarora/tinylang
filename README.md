@@ -16,10 +16,17 @@ Make sure you have `uv`. Clone/pull the repo and run the following to install th
 uv sync
 ```
 
+You may have to mess with the `zoology` package install if non-transformer architectures don't work. Try running:
+
+```
+uv remove zoology
+uv add "zoology @ https://github.com/aryamanarora/zoology.git" --no-build-isolation
+```
+
 Then, to run an experiment, make a config file in the same subfolder as `experiments/configs/pcfg.yaml` using that as an example. Make sure `training.log_dir` is set to point to a path in `experiments/logs/...`. Then, run
 
 ```
-tinylang experiments/configs/[YOUR CONFIG FILE].yaml
+uv run tinylang experiments/configs/[YOUR CONFIG FILE].yaml
 ```
 
 This will run a full training experiment, and store plots and logging data along with the model checkpoint in the log dir.
