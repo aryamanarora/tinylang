@@ -1,0 +1,30 @@
+evaluators:
+- class: SummaryEvaluator
+  config:
+    run_every_n_steps: 200
+language:
+  class: PCFG
+  config:
+    head_position: left
+    mask_nonquery: true
+    max_depth: 10
+    max_rhs_len: 5
+    max_rules_per_nt: 5
+    no_child_queries: true
+    no_sibling_queries: true
+    num_nonterminals: 20
+    num_terminals: 20
+model:
+  class: Zoology
+  config:
+    mixer_type: attention
+    n_embd: 512
+    n_head: 1
+    n_layer: 2
+    n_positions: 1024
+training:
+  eval_batch_size: 64
+  lr: 1e-4
+  num_eval_steps: 10
+  num_train_steps: 20000
+  train_batch_size: 16

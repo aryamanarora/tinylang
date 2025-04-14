@@ -1,7 +1,17 @@
-nlprun -q jag -g 1 -a boundless -n 4_4_128_llama 'uv run tinylang experiments/configs/pcfg_4_4_128_llama.yaml'
-nlprun -q jag -g 1 -a boundless -n 4_4_64_llama 'uv run tinylang experiments/configs/pcfg_4_4_64_llama.yaml'
-nlprun -q jag -g 1 -a boundless -n 4_4_32_llama 'uv run tinylang experiments/configs/pcfg_4_4_32_llama.yaml'
-nlprun -q jag -g 1 -a boundless -n 4_4_16_llama 'uv run tinylang experiments/configs/pcfg_4_4_16_llama.yaml'
+# given a folder of yaml files, run the sweep
+# folder should be required as an argument
+
+FOLDER=$1
+
+for file in $FOLDER/*.yaml; do
+    filename=$(basename "$file" .yaml)
+    nlprun -q jag -g 1 -a boundless -n "$filename" "uv run tinylang '$file'"
+done
+
+# nlprun -q jag -g 1 -a boundless -n 4_4_128_llama 'uv run tinylang experiments/configs/pcfg_4_4_128_llama.yaml'
+# nlprun -q jag -g 1 -a boundless -n 4_4_64_llama 'uv run tinylang experiments/configs/pcfg_4_4_64_llama.yaml'
+# nlprun -q jag -g 1 -a boundless -n 4_4_32_llama 'uv run tinylang experiments/configs/pcfg_4_4_32_llama.yaml'
+# nlprun -q jag -g 1 -a boundless -n 4_4_16_llama 'uv run tinylang experiments/configs/pcfg_4_4_16_llama.yaml'
 
 # nlprun -q jag -g 1 -a boundless -n 3_2_256_right 'uv run tinylang experiments/configs/pcfg_3_2_256_right.yaml'
 # nlprun -q jag -g 1 -a boundless -n 3_2_128_right 'uv run tinylang experiments/configs/pcfg_3_2_128_right.yaml'
