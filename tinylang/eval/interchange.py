@@ -10,7 +10,19 @@ import pyvene as pv
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+import re
 
+
+MEMO_IN = re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_input\.restored_prob")
+MEMO_OUT = re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_output\.restored_prob")
+MEMO_DIV_IN = re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_input\.restored_prob")
+MEMO_DIV_OUT = re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_output\.restored_prob")
+memo_map = {
+    "memo_in": MEMO_IN,
+    "memo_out": MEMO_OUT,
+    "memo_div_in": MEMO_DIV_IN,
+    "memo_div_out": MEMO_DIV_OUT,
+}
 
 # support for zoology models
 pv.type_to_module_mapping[LanguageModel] = {
@@ -137,19 +149,33 @@ class InterchangeEvaluator(Evaluator):
                 # deregister intervention
                 pv_gpt2._cleanup_states()
                 torch.cuda.empty_cache()
+
+                
                             
 
     def post_eval(self, step: int):
         for ending in ["kl_div", "restored_prob", "restored_logit"]:
             top = [(np.mean(v), k) for k, v in self.all_eval_stats[step].items() if k.endswith(ending)]
             for v, k in sorted(top):
-                print(f"{k:>80}: {v:.12f}")
+                print(f"{k:>80}: {v:.5f}")
             print('------')
+        
+        # memoisation score
+        all_keys = list(self.all_eval_stats[step].keys())
+        memo_keys = set()
+        for key in all_keys:
+            for memo_key, memo_regex in memo_map.items():
+                if memo_regex.match(key):
+                    self.all_eval_stats[step][f"{memo_key}.memo_score"].append(np.mean(self.all_eval_stats[step][key]).item())
+                    memo_keys.add(f"{memo_key}.memo_score")
+        for key in memo_keys:
+            self.all_eval_stats[step][key] = max(self.all_eval_stats[step][key])
+            print(f"{key}: {self.all_eval_stats[step][key]:.5f}")
 
 
     def plot(self, log_dir: str):
-        df = self.df
-        df = df.groupby(["step", "variable"]).mean().reset_index()
+        self.df = self.df.groupby(["step", "variable"]).mean().reset_index()
+        df = self.df[~self.df["variable"].str.endswith("memo_score")]
         df["layer"] = df["variable"].str.split(".").str[0]
         df["type"] = df["variable"].str.split(".").str[1]
         df["label_type"] = df["variable"].str.split(".").str[2]
