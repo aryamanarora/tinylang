@@ -35,8 +35,8 @@ build-backend = "hatchling.build"
 packages = ["tinylang"]
 
 [tool.uv.sources]
-pyvene = { path = "../pyvene", editable = true }
 zoology = { git = "https://github.com/aryamanarora/zoology.git" }
+pyvene = { git = "https://github.com/stanfordnlp/pyvene.git" }
 
 [project.scripts]
 tinylang = "tinylang.main:main"

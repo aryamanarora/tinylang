@@ -15,6 +15,7 @@ class Llama(Model):
         rope_theta: float = 10000.0,
     ):
         # initialize the model
+        self.n_layer = n_layer
         self.config = LlamaConfig(
             vocab_size=vocab_size,
             hidden_size=n_embd,

@@ -21,6 +21,7 @@ class Model(ABC):
         model_class = getattr(importlib.import_module("tinylang.model"), config["class"])
         # Create an instance with the config
         model = model_class(**config["config"])
+        model.config_dict = config
         return model
     
     @abstractmethod

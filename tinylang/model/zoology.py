@@ -16,10 +16,8 @@ class Zoology(Model):
         n_inner: int | None = None, # discarded, defaults to 4 * n_embd
         mixer_type: str = "attention",
         device: torch.device | None = None,
-    ):  
-
-        self.vocab_size = vocab_size
-
+    ):
+        self.n_layer = n_layer
         # configs taken from https://github.com/HazyResearch/zoology/blob/c42ae3370b9b13a04a23c5f9f4d967469ecb8958/zoology/experiments/iclr24_zoology_figure2/configs.py
         input_seq_len = n_positions
         MIXERS = {
@@ -108,10 +106,13 @@ class Zoology(Model):
             name="default",
         )
         self.model = LanguageModel(self.config)
+        # to satisfy pyvene
+        self.model.config = self.config
+        self.model.device = device
         self.model.to(device)
 
         # have to set up loss fxn
-        self.loss_fn = torch.nn.CrossEntropyLoss()
+        # self.loss_fn = torch.nn.CrossEntropyLoss()
 
     
     def step(self, input_ids: torch.Tensor, labels: torch.Tensor):
@@ -136,7 +137,7 @@ class Zoology(Model):
         auxiliary_loss = sum(auxiliary_loss)
 
         # need to flatten batch and sequence dimensions
-        main_loss = ForCausalLMLoss(logits, labels, vocab_size=self.vocab_size)
+        main_loss = ForCausalLMLoss(logits, labels, vocab_size=self.config.vocab_size)
         # main_loss = self.loss_fn(
         #     rearrange(logits, "... c -> (...) c"), labels.flatten()
         # )

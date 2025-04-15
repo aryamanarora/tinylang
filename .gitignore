@@ -13,3 +13,4 @@ wheels/
 # Logs
 experiments/logs*/*
 *.out
+wandb/

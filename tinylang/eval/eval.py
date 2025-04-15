@@ -1,13 +1,16 @@
 from abc import ABC, abstractmethod
 from tinylang.model import Model
 from tinylang.language import Language
-import torch
 import importlib
 from typing import Any
 import pandas as pd
 import plotnine as p9
 import os
 from collections import defaultdict
+import numpy as np
+import wandb
+
+
 def flatten_list(inputs: list[list[Any]]) -> list[Any]:
     if not isinstance(inputs[0], list):
         return inputs
@@ -72,5 +75,13 @@ class Evaluator(ABC):
             plot = p9.ggplot(df_subset, p9.aes(x="step", y="value")) + p9.geom_line()
             plot.save(os.path.join(log_dir, f"{str(self)}.{col}.png"))
     
-    def post_eval(self, step: int):
+    def post_eval(self, step: int, wandb: bool=False):
         pass
+
+    def wandb_log(self, step: int) -> dict:
+        """Default wandb logging method for all evaluators."""
+        result = {}
+        for key in self.all_eval_stats[step]:
+            mean_val = np.mean(self.all_eval_stats[step][key]).item()
+            result[f"eval/{str(self)}/{key}"] = mean_val
+        return result

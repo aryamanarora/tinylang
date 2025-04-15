@@ -5,7 +5,11 @@ FOLDER=$1
 
 for file in $FOLDER/*.yaml; do
     filename=$(basename "$file" .yaml)
-    nlprun -q jag -g 1 -a boundless -n "$filename" "uv run tinylang '$file'"
+    # skip if filename is template.yaml
+    if [[ "$filename" == "template" ]]; then
+        continue
+    fi
+    nlprun -q jag -g 1 -a boundless -n "$filename" "uv run tinylang '$file' --wandb"
 done
 
 # nlprun -q jag -g 1 -a boundless -n 4_4_128_llama 'uv run tinylang experiments/configs/pcfg_4_4_128_llama.yaml'

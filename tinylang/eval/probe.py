@@ -135,6 +135,17 @@ class ProbeEvaluator(Evaluator):
                                     for metric in metrics:
                                         self.all_eval_stats[step][f"{label}.{metric}"].append(metrics[metric])
 
+
+    def wandb_log(self, step: int) -> dict:
+        result = {}
+        for key in self.all_eval_stats[step]:
+            if key.split(".")[-1] in ["cos_sim", "dot_prod", "coef"]:
+                continue
+            mean_val = np.mean(self.all_eval_stats[step][key]).item()
+            result[f"eval/{str(self)}/{key}"] = mean_val
+        return result
+    
+
     def plot(self, log_dir: str):
         df = self.df
         df_all = df[~df["variable"].str.endswith(".coef")]

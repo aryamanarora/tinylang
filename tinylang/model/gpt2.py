@@ -14,6 +14,7 @@ class GPT2(Model):
         device: torch.device | None = None,
     ):
         # initialize the model
+        self.n_layer = n_layer
         self.config = GPT2Config(
             vocab_size=vocab_size,
             n_positions=n_positions,

@@ -12,6 +12,7 @@ class LSTM(Model):
     ):
         super().__init__()
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.n_layer = n_layer
         
         # Initialize embeddings
         self.embedding = nn.Embedding(vocab_size, n_embd)

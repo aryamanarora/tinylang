@@ -32,6 +32,7 @@ class PCFG(Language):
             no_sibling_queries: bool=False,
             no_child_queries: bool=False,
             no_start_queries: bool=True,
+            max_length: int=1024,
         ):
         super().__init__()
         self.PAD = 0
@@ -60,7 +61,7 @@ class PCFG(Language):
         self.max_depth = max_depth
         self.head_position = head_position
         self.mask_nonquery = mask_nonquery
-
+        self.max_length = max_length
         # which queries are disabled?
         self.no_sibling_queries = no_sibling_queries
         self.no_child_queries = no_child_queries
@@ -197,7 +198,7 @@ class PCFG(Language):
         while sentence is None:
             try:
                 sentence = self._sample()
-                if len(sentence) < 3:
+                if len(sentence) < 3 or len(sentence) > self.max_length:
                     sentence = None
                     continue
             except RecursionError:

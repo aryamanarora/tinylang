@@ -1,5 +1,6 @@
 from .eval import Evaluator
-from tinylang.model import Model
+from tinylang.model import Model, Zoology
+from zoology.model import LanguageModel
 from tinylang.language import Language
 import torch
 import plotnine as p9
@@ -9,6 +10,22 @@ import pyvene as pv
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+
+
+# support for zoology models
+pv.type_to_module_mapping[LanguageModel] = {
+    "block_output": ("backbone.layers[%s]", 
+                      pv.models.constants.CONST_OUTPUT_HOOK),
+    "attention_input": ("backbone.layers[%s]", 
+                        pv.models.constants.CONST_INPUT_HOOK),
+    "attention_output": ("backbone.layers[%s]", 
+                        pv.models.constants.CONST_OUTPUT_HOOK),
+}
+pv.type_to_dimension_mapping[LanguageModel] = {
+    "block_output": ("d_model",),
+    "attention_input": ("d_model",),
+    "attention_output": ("d_model",),
+}
 
 
 class InterchangeEvaluator(Evaluator):
@@ -21,12 +38,13 @@ class InterchangeEvaluator(Evaluator):
 
     @torch.no_grad()
     def eval(self, model: Model, language: Language, inputs: dict, outputs: dict, step: int):
+        assert hasattr(model, "n_layer")
         probing_schemas = inputs["probing_schemas"]
         hidden_states = outputs["hidden_states"]
         types = set([x["type"] for x in probing_schemas])
         
         for component in ["attention_input", "attention_output", "block_output"]:
-            for layer in range(1, len(hidden_states)):
+            for layer in range(model.n_layer):
                 true_layer = layer - 1
                 config = {"layer": true_layer, "component": component, "unit": "pos"}
                 pv_config = pv.IntervenableConfig(config)
@@ -39,7 +57,7 @@ class InterchangeEvaluator(Evaluator):
                         all_inputs, all_corrupted_inputs = [], []
                         all_unit_locations = []
 
-                        for batch_idx in range(len(hidden_states[layer])):
+                        for batch_idx in range(len(probing_schemas)):
                             input_ids = inputs["input_ids"][batch_idx]
                             divider_pos = probing_schemas[batch_idx]["queries"]["divider"]["pos"]
                             
@@ -75,15 +93,18 @@ class InterchangeEvaluator(Evaluator):
                             unit_locations={"sources->base": ([[[x] for x in all_unit_locations]], [[[x] for x in all_unit_locations]])},
                             output_original_output=True,
                         )
+                        if type(model) != Zoology:
+                            intervened_outputs = intervened_outputs["logits"]
+                            corrupted_outputs = corrupted_outputs["logits"]
 
                         # compute metrics
-                        for batch_idx in range(len(hidden_states[layer])):
+                        for batch_idx in range(len(probing_schemas)):
                             t = probing_schemas[batch_idx]["type"]
                             pos_to_check = probing_schemas[batch_idx]["queries"]["target_item"]["pos"] - 1
                             orig_output = inputs["input_ids"][batch_idx][pos_to_check + 1]
-                            intervened_logits = intervened_outputs["logits"][batch_idx].cpu()
+                            intervened_logits = intervened_outputs[batch_idx].cpu()
                             original_logits = outputs["logits"][batch_idx].cpu()
-                            corrupted_logits = corrupted_outputs["logits"][batch_idx].cpu()
+                            corrupted_logits = corrupted_outputs[batch_idx].cpu()
 
                             intervened_logit = intervened_logits.squeeze(0)[pos_to_check]
                             corrupted_logit = corrupted_logits.squeeze(0)[pos_to_check]

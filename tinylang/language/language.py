@@ -20,6 +20,7 @@ class Language(ABC):
         language_class = getattr(importlib.import_module("tinylang.language"), config["class"])
         # Create an instance with the config
         language = language_class(**config["config"])
+        language.config_dict = config
         return language
     
     @abstractmethod

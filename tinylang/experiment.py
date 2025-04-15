@@ -9,12 +9,16 @@ import pandas as pd
 import plotnine as p9
 import numpy as np
 import random
-import shutil
+import wandb
 
 # fix all seeds
 torch.manual_seed(42)
 np.random.seed(42)
 random.seed(42)
+
+# wandb config
+WANDB_PROJECT = "tinylang"
+WANDB_ENTITY = "aryamanarora"
 
 
 class TrainingConfig:
@@ -28,6 +32,7 @@ class TrainingConfig:
         log_dir: str,
         save_every_n_steps: int | None = None,
         verbose: bool = False,
+        wandb: bool = False,
     ):
         self.train_batch_size = train_batch_size
         self.eval_batch_size = eval_batch_size
@@ -37,6 +42,7 @@ class TrainingConfig:
         self.save_every_n_steps = save_every_n_steps
         self.log_dir = log_dir
         self.verbose = verbose
+        self.wandb = wandb
 
 class Experiment:
     def __init__(
@@ -50,6 +56,7 @@ class Experiment:
         self.language = language
         self.evaluators = evaluators
         self.training_config = TrainingConfig(**training_config) if isinstance(training_config, dict) else training_config
+        self.wandb = self.training_config.wandb
         self.verbose = self.training_config.verbose
 
         # set up optimizer and lr scheduler
@@ -59,8 +66,23 @@ class Experiment:
         os.makedirs(self.training_config.log_dir, exist_ok=True)
 
         # print model size
-        if self.verbose:
-            print(f"Model size: {sum(p.numel() for p in self.model.model.parameters())}")
+        size = sum(p.numel() for p in self.model.model.parameters())
+        print(f"Model size: {size}")
+
+        # log to wandb
+        name = self.training_config.log_dir.split("logs/")[-1].replace("//", "/").replace("//", "/")
+        if self.wandb:
+            self.wandb_run = wandb.init(
+                project=WANDB_PROJECT,
+                entity=WANDB_ENTITY,
+                name=name,
+                config={
+                    "training": self.training_config,
+                    "language": self.language.config_dict,
+                    "model": self.model.config_dict,
+                    "model_size": size,
+                }
+            )
 
 
     @classmethod
@@ -95,29 +117,31 @@ class Experiment:
     def train(self):
         """Main training loop."""
         iterator = tqdm(range(self.training_config.num_train_steps + 1), desc="Training") if self.verbose else range(self.training_config.num_train_steps + 1)
-        all_eval_stats = defaultdict(list)
         for step in iterator:
             # print current cuda memory usage
             # print(torch.cuda.memory_stats(device=self.model.model.device)["allocated_bytes.all.peak"])
 
             # one eval step (we want to eval at init for baselines, and after training)
             eval_stats = self.eval_step(step)
-            if eval_stats != {}:
-                all_eval_stats[step] = eval_stats
+            eval_stats["step"] = step
 
             # one train step
             if step != self.training_config.num_train_steps:
                 train_loss = self.train_step(step)
+                eval_stats["train/loss"] = train_loss
                 if self.verbose:
                     iterator.set_postfix(loss=train_loss)
 
             # optional save
             if self.training_config.save_every_n_steps is not None and step % self.training_config.save_every_n_steps == 0:
                 self.save_checkpoint(step)
+            
+            # optional wandb log
+            if self.wandb:
+                self.wandb_run.log(eval_stats)
 
         # final eval
-        # self.final_eval()
-        self.make_plots(all_eval_stats)
+        self.make_plots()
 
         # save model and language to log dir for reproducibility
         self.model.save(os.path.join(self.training_config.log_dir, "model.pt"))
@@ -147,11 +171,11 @@ class Experiment:
         return loss.item()
 
 
-    def eval_step(self, step: int):
+    def eval_step(self, step: int) -> dict:
         """Run all evaluators."""
         # skip if step is not divisible by run_every_n_steps
         if all(step % evaluator.run_every_n_steps != 0 for evaluator in self.evaluators):
-            return
+            return {}
 
         # set model to eval
         self.model.model.eval()
@@ -172,9 +196,12 @@ class Experiment:
                     evaluator.eval(self.model, self.language, inputs, outputs, step=step)
 
         # run all evaluators
+        results = {}
         for evaluator in tqdm(self.evaluators, desc="Post-evals") if self.verbose else self.evaluators:
             if step % evaluator.run_every_n_steps == 0:
                 evaluator.post_eval(step=step)
+                if self.wandb:
+                    results.update(evaluator.wandb_log(step=step))
                 # print(torch.cuda.memory_stats(device=self.model.model.device)["allocated_bytes.all.peak"])
                 torch.cuda.empty_cache()
         
@@ -186,8 +213,9 @@ class Experiment:
         for param in self.model.model.parameters():
             param.requires_grad = True
         self.model.model.train()
+        return results
 
-    def make_plots(self, all_eval_stats: dict[int, dict]):
+    def make_plots(self):
         """Make plots of the evaluation stats."""
 
         for evaluator in self.evaluators:
