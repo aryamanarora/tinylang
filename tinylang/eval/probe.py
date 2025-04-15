@@ -151,6 +151,7 @@ class ProbeEvaluator(Evaluator):
         df_all = df[~df["variable"].str.endswith(".coef")]
         df_coef = df[df["variable"].str.endswith(".coef")]
         df_all = df_all.groupby(["step", "variable"]).mean().reset_index()
+        self.df = pd.concat([df_all, df_coef]) # for saving
 
         # probe accuracy
         df_acc = df_all[df_all["variable"].str.endswith(".acc")]
