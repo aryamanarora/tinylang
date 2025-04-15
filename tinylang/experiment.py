@@ -70,14 +70,16 @@ class Experiment:
         print(f"Model size: {size}")
 
         # log to wandb
-        name = self.training_config.log_dir.split("logs/")[-1].replace("//", "/").replace("//", "/")
+        name = self.training_config.log_dir.split("/logs/")[-1].replace("//", "/").replace("//", "/")
+        name = name.replace(".", "_")
+        training_dict = self.training_config.__dict__
         if self.wandb:
             self.wandb_run = wandb.init(
                 project=WANDB_PROJECT,
                 entity=WANDB_ENTITY,
                 name=name,
                 config={
-                    "training": self.training_config,
+                    "training": training_dict,
                     "language": self.language.config_dict,
                     "model": self.model.config_dict,
                     "model_size": size,

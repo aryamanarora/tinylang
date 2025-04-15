@@ -15,9 +15,13 @@ class Zoology(Model):
         n_head: int = 1,
         n_inner: int | None = None, # discarded, defaults to 4 * n_embd
         mixer_type: str = "attention",
+        state_mixer_type: str | None = None,
         device: torch.device | None = None,
+        bias: bool = True,
     ):
+        n_inner = 4 * n_embd if n_inner is None else n_inner
         self.n_layer = n_layer
+
         # configs taken from https://github.com/HazyResearch/zoology/blob/c42ae3370b9b13a04a23c5f9f4d967469ecb8958/zoology/experiments/iclr24_zoology_figure2/configs.py
         input_seq_len = n_positions
         MIXERS = {
@@ -26,18 +30,21 @@ class Zoology(Model):
                 kwargs={
                     "dropout": 0.1,
                     "num_heads": n_head,
+                    "bias": bias,
                 },
             ),
             "hyena": dict(
                 name="zoology.mixers.hyena.Hyena",
                 kwargs={
-                    "l_max": input_seq_len
+                    "l_max": input_seq_len,
+                    "bias": bias,
                 },
             ),
             "rwkv": dict(
                 name="zoology.mixers.rwkv.RWKVTimeMixer",
                 kwargs={
                     "l_max": input_seq_len,
+                    "bias": bias,
                 },
             ),
             "base_conv": dict(
@@ -45,7 +52,8 @@ class Zoology(Model):
                 kwargs={
                     "l_max": input_seq_len,
                     # pass a list of kernel sizes for each of four layers
-                    "kernel_size": [3, -1, 3, -1]
+                    "kernel_size": [3, -1, 3, -1],
+                    "bias": bias,
                 }
             ),
             "h3": dict(
@@ -53,7 +61,8 @@ class Zoology(Model):
                 kwargs={
                     "l_max": input_seq_len,
                     "d_state": input_seq_len,  # makes it mathematically equivalent to Hyena
-                    "head_dim": 2
+                    "head_dim": 2,
+                    "bias": bias,
                 }
             ),
             "based": dict(
@@ -67,6 +76,7 @@ class Zoology(Model):
                                 # pass a list of kernel sizes for each of four layers
                                 "kernel_size": 3,
                                 "implicit_long_conv": True,
+                                "bias": bias,
                             }
                         ),
                         dict(
@@ -77,7 +87,8 @@ class Zoology(Model):
                                 "num_key_value_heads": n_head,
                                 "num_heads": n_head,
                                 "feature_name": "taylor_exp",
-                                "train_view": "quadratic"
+                                "train_view": "quadratic",
+                                "bias": bias,
                             }
                         )
                     ]
@@ -85,13 +96,23 @@ class Zoology(Model):
             ),
             "mamba": dict(
                 name="zoology.mixers.mamba.Mamba",
-                kwargs={}
+                kwargs={
+                    "bias": bias,
+                }
             ),
         }
 
+        # add MLP or GLU to model
+        state_mixer = dict(name="torch.nn.Identity", kwargs={})
+        assert n_inner % n_embd == 0, "n_inner must be divisible by n_embd"
+        if state_mixer_type in ["mlp", "glu"]:
+            name = state_mixer_type.upper()
+            state_mixer = dict(name=f"zoology.mixers.mlp.{name}", kwargs={"hidden_mult": n_inner // n_embd})
+
+        # set up config
         self.config = ModelConfig(
             sequence_mixer=MIXERS[mixer_type],
-            state_mixer=dict(name="torch.nn.Identity", kwargs={}),
+            state_mixer=state_mixer,
             d_model=n_embd,
             n_layers=n_layer,
             max_position_embeddings=n_positions if mixer_type == "attention" else 0,
