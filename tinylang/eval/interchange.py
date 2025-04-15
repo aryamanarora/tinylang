@@ -28,9 +28,9 @@ memo_map = {
 pv.type_to_module_mapping[LanguageModel] = {
     "block_output": ("backbone.layers[%s]", 
                       pv.models.constants.CONST_OUTPUT_HOOK),
-    "attention_input": ("backbone.layers[%s]", 
+    "attention_input": ("backbone.layers[%s].sequence_mixer", 
                         pv.models.constants.CONST_INPUT_HOOK),
-    "attention_output": ("backbone.layers[%s]", 
+    "attention_output": ("backbone.layers[%s].sequence_mixer", 
                         pv.models.constants.CONST_OUTPUT_HOOK),
 }
 pv.type_to_dimension_mapping[LanguageModel] = {
@@ -57,7 +57,7 @@ class InterchangeEvaluator(Evaluator):
         
         for component in ["attention_input", "attention_output", "block_output"]:
             for layer in range(model.n_layer):
-                true_layer = layer - 1
+                true_layer = layer
                 config = {"layer": true_layer, "component": component, "unit": "pos"}
                 pv_config = pv.IntervenableConfig(config)
                 pv_gpt2 = pv.IntervenableModel(pv_config, model=model.model)
