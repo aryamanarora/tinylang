@@ -5,13 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+    "calflops>=0.3.2",
     "editables>=0.5",
+    "fvcore>=0.1.5.post20221221",
     "hatchling>=1.27.0",
     "imageio>=2.37.0",
     "ipykernel>=6.29.5",
     "matplotlib",
     "notebook>=7.3.2",
     "numpy",
+    "opt-einsum>=3.4.0",
     "plotnine",
     "pyarrow>=19.0.1",
     "pyvene",

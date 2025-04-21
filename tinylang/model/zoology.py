@@ -5,6 +5,7 @@ from .model import Model
 import torch
 from einops import rearrange
 
+
 class Zoology(Model):
     def __init__(
         self,
@@ -17,7 +18,7 @@ class Zoology(Model):
         mixer_type: str = "attention",
         state_mixer_type: str | None = None,
         device: torch.device | None = None,
-        bias: bool = True,
+        bias: bool = False,
     ):
         n_inner = 4 * n_embd if n_inner is None else n_inner
         self.n_layer = n_layer
@@ -28,7 +29,7 @@ class Zoology(Model):
             "attention": dict(
                 name="zoology.mixers.attention.MHA",
                 kwargs={
-                    "dropout": 0.1,
+                    "dropout": 0.0,
                     "num_heads": n_head,
                     "bias": bias,
                 },
@@ -115,7 +116,7 @@ class Zoology(Model):
             state_mixer=state_mixer,
             d_model=n_embd,
             n_layers=n_layer,
-            max_position_embeddings=n_positions if mixer_type == "attention" else 0,
+            max_position_embeddings=n_positions,
             learnable_word_embeddings=True,
             vocab_size=vocab_size,
             resid_dropout=0.0,
@@ -127,13 +128,14 @@ class Zoology(Model):
             name="default",
         )
         self.model = LanguageModel(self.config)
+
         # to satisfy pyvene
         self.model.config = self.config
         self.model.device = device
         self.model.to(device)
-
-        # have to set up loss fxn
-        # self.loss_fn = torch.nn.CrossEntropyLoss()
+        self.components = ["attention_input", "attention_output", "block_output"]
+        if self.config.block_type == "MambaBlock":
+            self.components = ["mamba_input", "mamba_output", "block_output"]
 
     
     def step(self, input_ids: torch.Tensor, labels: torch.Tensor):

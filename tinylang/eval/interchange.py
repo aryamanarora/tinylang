@@ -26,17 +26,33 @@ memo_map = {
 
 # support for zoology models
 pv.type_to_module_mapping[LanguageModel] = {
+    "block_input": ("backbone.layers[%s]", 
+                    pv.models.constants.CONST_INPUT_HOOK),
     "block_output": ("backbone.layers[%s]", 
                       pv.models.constants.CONST_OUTPUT_HOOK),
     "attention_input": ("backbone.layers[%s].sequence_mixer", 
                         pv.models.constants.CONST_INPUT_HOOK),
     "attention_output": ("backbone.layers[%s].sequence_mixer", 
                         pv.models.constants.CONST_OUTPUT_HOOK),
+    "mamba_input": ("backbone.layers[%s].mixer", 
+                    pv.models.constants.CONST_INPUT_HOOK),
+    "mamba_output": ("backbone.layers[%s].mixer", 
+                    pv.models.constants.CONST_OUTPUT_HOOK),
+    "mlp_input": ("backbone.layers[%s].state_mixer", 
+                  pv.models.constants.CONST_INPUT_HOOK),
+    "mlp_output": ("backbone.layers[%s].state_mixer", 
+                   pv.models.constants.CONST_OUTPUT_HOOK),
+    "final_layernorm_input": ("backbone.ln_f", 
+                              pv.models.constants.CONST_INPUT_HOOK),
 }
 pv.type_to_dimension_mapping[LanguageModel] = {
+    "block_input": ("d_model",),
     "block_output": ("d_model",),
     "attention_input": ("d_model",),
     "attention_output": ("d_model",),
+    "mlp_input": ("d_model",),
+    "mlp_output": ("d_model",),
+    "final_layernorm_input": ("d_model",),
 }
 
 
@@ -55,9 +71,17 @@ class InterchangeEvaluator(Evaluator):
         hidden_states = outputs["hidden_states"]
         types = set([x["type"] for x in probing_schemas])
         
-        for component in ["attention_input", "attention_output", "block_output"]:
+        components = ["attention_input", "attention_output", "block_output"] if model.components is None else model.components
+        for component in components:
             for layer in range(model.n_layer):
                 true_layer = layer
+                if isinstance(model, Zoology):
+                    if component == "block_output":
+                        if layer != model.n_layer - 1:
+                            true_layer = layer + 1
+                            component = "block_input"
+                        else:
+                            component = "final_layernorm_input"
                 config = {"layer": true_layer, "component": component, "unit": "pos"}
                 pv_config = pv.IntervenableConfig(config)
                 pv_gpt2 = pv.IntervenableModel(pv_config, model=model.model)

@@ -52,7 +52,6 @@ class PCFG(Language):
             self.id_to_token[self.TERMINAL_START + i] = f"t{i}"
         for i in range(len(QueryType)):
             self.id_to_token[self.QUERY_START + i] = f"q{QueryType(i).name}"
-        print(self.id_to_token, self.vocab_size)
 
         self.num_terminals = num_terminals
         self.num_nonterminals = num_nonterminals
