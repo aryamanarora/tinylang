@@ -83,5 +83,5 @@ class Evaluator(ABC):
         result = {}
         for key in self.all_eval_stats[step]:
             mean_val = np.mean(self.all_eval_stats[step][key]).item()
-            result[f"eval/{str(self)}/{key}"] = mean_val
+            result[f"{str(self)}/{key}"] = mean_val
         return result

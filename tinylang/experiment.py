@@ -49,7 +49,7 @@ class Experiment:
         self,
         model: Model,
         language: Language,
-        evaluators: list[Evaluator],
+        evaluators: dict[str, list[Evaluator]],
         training_config: dict | TrainingConfig,
     ):
         self.model = model
@@ -101,7 +101,8 @@ class Experiment:
 
         # load configs
         model = Model.from_config(config["model"])
-        evaluators = [Evaluator.from_config(evaluator) for evaluator in config["evaluators"]]
+        dev_evaluators = [Evaluator.from_config(evaluator) for evaluator in config["evaluators"]]
+        test_evaluators = [Evaluator.from_config(evaluator) for evaluator in config["evaluators"]]
         training_config = TrainingConfig(**config["training"])
 
         # prepare train/eval sets
@@ -113,7 +114,7 @@ class Experiment:
         )
 
         # return experiment
-        return cls(model, language, evaluators, training_config)
+        return cls(model, language, {"dev": dev_evaluators, "test": test_evaluators}, training_config)
     
 
     def train(self):
@@ -124,7 +125,9 @@ class Experiment:
             # print(torch.cuda.memory_stats(device=self.model.model.device)["allocated_bytes.all.peak"])
 
             # one eval step (we want to eval at init for baselines, and after training)
-            eval_stats = self.eval_step(step)
+            eval_stats = {}
+            for split, evaluators in self.evaluators.items():
+                eval_stats.update(self.eval_step(step, split=split, evaluators=evaluators))
             eval_stats["step"] = step
 
             # one train step
@@ -173,10 +176,10 @@ class Experiment:
         return loss.item()
 
 
-    def eval_step(self, step: int) -> dict:
+    def eval_step(self, step: int, split: str="test", evaluators: list[Evaluator]=None) -> dict:
         """Run all evaluators."""
         # skip if step is not divisible by run_every_n_steps
-        if all(step % evaluator.run_every_n_steps != 0 for evaluator in self.evaluators):
+        if all(step % evaluator.run_every_n_steps != 0 for evaluator in evaluators):
             return {}
 
         # set model to eval
@@ -187,23 +190,24 @@ class Experiment:
         eval_steps = self.training_config.num_eval_steps
         all_outputs = []
         for eval_step in (tqdm(range(eval_steps), desc="Evals") if self.verbose else range(eval_steps)):
-            inputs = self.language.get_eval_step(step=eval_step, batch_size=eval_batch_size)
+            inputs = self.language.get_eval_step(step=eval_step, batch_size=eval_batch_size, split=split)
             outputs = self.model.step(inputs["input_ids"], inputs["labels"])
             for k in outputs:
                 if isinstance(outputs[k], torch.Tensor):
                     outputs[k] = outputs[k].cpu()
             all_outputs.append(outputs)
-            for evaluator in self.evaluators:
+            for evaluator in evaluators:
                 if step % evaluator.run_every_n_steps == 0:
                     evaluator.eval(self.model, self.language, inputs, outputs, step=step)
 
         # run all evaluators
         results = {}
-        for evaluator in tqdm(self.evaluators, desc="Post-evals") if self.verbose else self.evaluators:
+        for evaluator in tqdm(evaluators, desc="Post-evals") if self.verbose else evaluators:
             if step % evaluator.run_every_n_steps == 0:
                 evaluator.post_eval(step=step)
                 if self.wandb:
-                    results.update(evaluator.wandb_log(step=step))
+                    for k, v in evaluator.wandb_log(step=step).items():
+                        results[f"{split if split != 'test' else 'eval'}/{k}"] = v
                 # print(torch.cuda.memory_stats(device=self.model.model.device)["allocated_bytes.all.peak"])
                 torch.cuda.empty_cache()
         
@@ -220,9 +224,10 @@ class Experiment:
     def make_plots(self):
         """Make plots of the evaluation stats."""
 
-        for evaluator in self.evaluators:
-            evaluator.prepare_plot()
-            evaluator.plot(log_dir=self.training_config.log_dir)
+        for split in self.evaluators:
+            for evaluator in self.evaluators[split]:
+                evaluator.prepare_plot()
+                evaluator.plot(log_dir=self.training_config.log_dir)
 
-            # save the df as csv
-            evaluator.df.to_csv(os.path.join(self.training_config.log_dir, f"{str(evaluator)}.csv"), index=False)
+                # save the df as csv
+                evaluator.df.to_csv(os.path.join(self.training_config.log_dir, f"{split}/{str(evaluator)}.csv"), index=False)

@@ -1,38 +1,36 @@
-model:
-  class: "Llama"
-  config:
-    n_positions: 1024
-    n_embd: 16 # n_inner is 4x by default
-    n_layer: 4
-    n_head: 4
-language:
-  class: "PCFG"
-  config:
-    num_terminals: 20
-    num_nonterminals: 10
-    max_rhs_len: 10
-    max_rules_per_nt: 5
-    max_depth: 10
-    head_position: "left"
-    mask_nonquery: True
-    no_sibling_queries: True
-    no_child_queries: True
 evaluators:
-  - class: "SummaryEvaluator"
-    config:
-      run_every_n_steps: 1000
-  - class: "AttentionEvaluator"
-    config:
-      run_every_n_steps: 1000
-  - class: "ProbeEvaluator"
-    config:
-      run_every_n_steps: 1000
-  - class: "InterchangeEvaluator"
-    config:
-      run_every_n_steps: 1000
+- class: SummaryEvaluator
+  config:
+    run_every_n_steps: 200
+- class: InterchangeEvaluator
+  config:
+    run_every_n_steps: 400
+language:
+  class: PCFG
+  config:
+    head_position: left
+    mask_nonquery: true
+    max_depth: 10
+    max_rhs_len: 5
+    max_rules_per_nt: 5
+    no_child_queries: true
+    no_sibling_queries: true
+    num_nonterminals: 20
+    num_terminals: 20
+    train_test_split: 0.8
+model:
+  class: Zoology
+  config:
+    bias: false
+    mixer_type: based
+    n_embd: 64
+    n_head: 1
+    n_layer: 2
+    n_positions: 1024
+    state_mixer_type: mlp
 training:
-  train_batch_size: 16
-  num_train_steps: 10000
-  eval_batch_size: 16
+  eval_batch_size: 64
+  lr: 0.0001
   num_eval_steps: 10
-  lr: 1e-3
+  num_train_steps: 50000
+  train_batch_size: 16

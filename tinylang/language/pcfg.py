@@ -21,19 +21,19 @@ Node = namedtuple("Node", ["label", "id", "head_id"])
 
 class PCFG(Language):
     def __init__(
-            self,
-            num_terminals: int,
-            num_nonterminals: int,
-            max_rhs_len: int,
-            max_rules_per_nt: int,
-            max_depth: int,
-            head_position: str="left",
-            mask_nonquery: bool=False,
-            no_sibling_queries: bool=False,
-            no_child_queries: bool=False,
-            no_start_queries: bool=True,
-            max_length: int=1024,
-        ):
+        self,
+        num_terminals: int,
+        num_nonterminals: int,
+        max_rhs_len: int,
+        max_rules_per_nt: int,
+        max_depth: int,
+        head_position: str="left",
+        mask_nonquery: bool=False,
+        no_sibling_queries: bool=False,
+        no_child_queries: bool=False,
+        max_length: int=1024,
+        train_test_split: float=0.0,
+    ):
         super().__init__()
         self.PAD = 0
         self.BOS = 1
@@ -61,6 +61,7 @@ class PCFG(Language):
         self.head_position = head_position
         self.mask_nonquery = mask_nonquery
         self.max_length = max_length
+
         # which queries are disabled?
         self.no_sibling_queries = no_sibling_queries
         self.no_child_queries = no_child_queries
@@ -69,7 +70,15 @@ class PCFG(Language):
             self.acceptable_query_types.append(QueryType.CHILD)
         if not self.no_sibling_queries:
             self.acceptable_query_types.append(QueryType.SIBLING)
-        self.no_start_queries = no_start_queries
+
+        # are any pairs prohibited in the train set?
+        if train_test_split > 0.0:
+            self.blacklist_matrix = np.random.rand(self.num_terminals, self.num_terminals)
+            # set train_test_split % of matrix to 1
+            self.blacklist_matrix = (self.blacklist_matrix < train_test_split).astype(int)
+            self.prohibited_pairs = set([(i, j) for i in range(self.num_terminals) for j in range(self.num_terminals) if self.blacklist_matrix[i, j] == 1])
+        else:
+            self.prohibited_pairs = set()
         
         # make the terminals and nonterminals
         self.terminals = [f"t{i}" for i in range(num_terminals)]
@@ -109,11 +118,13 @@ class PCFG(Language):
     def prepare_sets(self, train_batch_size: int, eval_batch_size: int, num_train_steps: int, num_eval_steps: int):
         """Prepare the train and eval sets."""
         # we ignore train steps since we are generating on the fly
-        self.eval_toks, self.eval_probing_schemas = [], []
-        for _ in range(num_eval_steps * eval_batch_size):
-            tok, probing_schema = self.sample()
-            self.eval_toks.append(tok)
-            self.eval_probing_schemas.append(probing_schema)
+        self.evalsets = {"dev": {}, "test": {}}
+        for split in ["dev", "test"]:
+            self.evalsets[split]["toks"], self.evalsets[split]["probing_schemas"] = [], []
+            for _ in range(num_eval_steps * eval_batch_size):
+                tok, probing_schema = self.sample(split=split)
+                self.evalsets[split]["toks"].append(tok)
+                self.evalsets[split]["probing_schemas"].append(probing_schema)
 
     
     def prettify(self, toks: list[int], probing_schema: dict | None = None) -> str:
@@ -191,10 +202,11 @@ class PCFG(Language):
         else:
             raise ValueError(f"Invalid query type: {relation}")
         
-    def sample(self):
+    def sample(self, split: str="train"):
         """Generate a document from the PCFG, i.e. a sentence, a query, and a response."""
         sentence = None
         while sentence is None:
+            # generate a sentence
             try:
                 sentence = self._sample()
                 if len(sentence) < 3 or len(sentence) > self.max_length:
@@ -204,23 +216,50 @@ class PCFG(Language):
                 sentence = None
                 continue
 
-            # check if any eligible positions are left
-            eligible_pos = list(range(len(sentence)))
-            if self.no_child_queries and self.no_sibling_queries: # must be a parent query
+            # check eligible query positions
+            eligible_targets = list(range(len(sentence)))
+            id_to_pos = {node.id: i for i, node in enumerate(sentence)}
+            parent_to_children = defaultdict(list)
+            for node in sentence:
+                if node.head_id is None:
+                    continue
+                parent_to_children[id_to_pos[node.head_id]].append(id_to_pos[node.id])
+
+            # parent queries only
+            if self.no_child_queries and self.no_sibling_queries:
                 all_heads = set([x.head_id for x in sentence])
-                eligible_pos = [i for i in eligible_pos if sentence[i].id in all_heads]
-            if len(eligible_pos) == 0:
+                eligible_targets = [i for i in eligible_targets if sentence[i].id in all_heads]
+                eligible_queries = {}
+                for target in eligible_targets:
+                    target_label = int(sentence[target].label[1:])
+                    children = parent_to_children[target]
+                    if len(self.prohibited_pairs) > 0:
+                        if split in ["train", "dev"]:
+                            children = [c for c in children if (target_label, int(sentence[c].label[1:])) not in self.prohibited_pairs]
+                        elif split == "test":
+                            children = [c for c in children if (target_label, int(sentence[c].label[1:])) in self.prohibited_pairs]
+                    if len(children) > 0:
+                        eligible_queries[target] = children
+                
+                # clear empty targets
+                eligible_targets = [t for t in eligible_targets if t in eligible_queries]
+            
+            # if no eligible positions, try again
+            if len(eligible_targets) == 0:
                 sentence = None
 
         # we first uniformly sample the target item, this way the target distribution is uniform
         # models cannot easily cheat by predicting some likely targets!
-        target_item = np.random.choice(eligible_pos)
+        target_item = np.random.choice(eligible_targets)
         target_item_pos = 1 + target_item
 
         # generate the possible queries leading to the target item
         possible_queries_and_targets = {}
-        for query_type in self.acceptable_query_types:
-            possible_queries_and_targets[query_type] = [i for i in range(len(sentence)) if self.is_relation(sentence, query_type, i, target_item)]
+        if self.no_child_queries and self.no_sibling_queries:
+            possible_queries_and_targets[QueryType.PARENT] = eligible_queries[target_item]
+        else:
+            for query_type in self.acceptable_query_types:
+                possible_queries_and_targets[query_type] = [i for i in range(len(sentence)) if self.is_relation(sentence, query_type, i, target_item)]
         tokens = [self.BOS] + [int(x.label[1:]) + self.TERMINAL_START for x in sentence]
 
         # get target item token
@@ -338,18 +377,18 @@ class PCFG(Language):
     def get_train_step(self, step: int, batch_size: int, verbose: bool = False) -> dict:
         toks, probing_schemas = [], []
         for _ in range(batch_size):
-            tok, probing_schema = self.sample()
+            tok, probing_schema = self.sample(split="train")
             toks.append(tok)
             probing_schemas.append(probing_schema)
 
         return self.batchify(toks, probing_schemas, verbose=verbose)
 
 
-    def get_eval_step(self, step: int, batch_size: int) -> dict:
+    def get_eval_step(self, step: int, batch_size: int, split: str="test") -> dict:
         """Get an eval step."""
-        batch_start, batch_end = step * batch_size, min(len(self.eval_toks), (step + 1) * batch_size)
+        batch_start, batch_end = step * batch_size, min(len(self.evalsets[split]["toks"]), (step + 1) * batch_size)
         return self.batchify(
-            self.eval_toks[batch_start:batch_end],
-            self.eval_probing_schemas[batch_start:batch_end],
+            self.evalsets[split]["toks"][batch_start:batch_end],
+            self.evalsets[split]["probing_schemas"][batch_start:batch_end],
             verbose=True,
         )

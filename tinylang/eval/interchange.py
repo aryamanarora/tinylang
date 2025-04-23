@@ -175,8 +175,6 @@ class InterchangeEvaluator(Evaluator):
                 torch.cuda.empty_cache()
 
                 
-                            
-
     def post_eval(self, step: int):
         for ending in ["kl_div", "restored_prob", "restored_logit"]:
             top = [(np.mean(v), k) for k, v in self.all_eval_stats[step].items() if k.endswith(ending)]

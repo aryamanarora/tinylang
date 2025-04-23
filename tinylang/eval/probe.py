@@ -14,6 +14,7 @@ import imageio
 import pandas as pd
 from sklearn.decomposition import PCA
 import io
+import numpy as np
 
 
 class MLPProbe(nn.Module):
