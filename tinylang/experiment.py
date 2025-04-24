@@ -33,6 +33,7 @@ class TrainingConfig:
         save_every_n_steps: int | None = None,
         verbose: bool = False,
         wandb: bool = False,
+        weight_decay: float = 0.0,
     ):
         self.train_batch_size = train_batch_size
         self.eval_batch_size = eval_batch_size
@@ -43,7 +44,9 @@ class TrainingConfig:
         self.log_dir = log_dir
         self.verbose = verbose
         self.wandb = wandb
+        self.weight_decay = weight_decay
 
+        
 class Experiment:
     def __init__(
         self,
@@ -60,7 +63,11 @@ class Experiment:
         self.verbose = self.training_config.verbose
 
         # set up optimizer and lr scheduler
-        self.optimizer = torch.optim.AdamW(self.model.model.parameters(), lr=self.training_config.lr)
+        self.optimizer = torch.optim.AdamW(
+            self.model.model.parameters(),
+            lr=self.training_config.lr,
+            weight_decay=self.training_config.weight_decay,
+        )
 
         # set up log dir
         os.makedirs(self.training_config.log_dir, exist_ok=True)

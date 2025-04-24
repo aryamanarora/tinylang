@@ -97,7 +97,13 @@ class Zoology(Model):
                 }
             ),
             "mamba": dict(
-                name="zoology.mixers.mamba.Mamba",
+                name="mamba_ssm.modules.mamba_simple.Mamba",
+                kwargs={
+                    "bias": bias,
+                }
+            ),
+            "mamba2": dict(
+                name="mamba_ssm.modules.mamba2.Mamba2",
                 kwargs={
                     "bias": bias,
                 }
@@ -125,7 +131,7 @@ class Zoology(Model):
             drop_path=0.0,
             layer_norm_epsilon=1e-5,
             pad_vocab_size_multiple=1,
-            block_type="MambaBlock" if mixer_type == "mamba" else "TransformerBlock",
+            block_type="TransformerBlock",
             name="default",
         )
         self.model = LanguageModel(self.config)
@@ -135,8 +141,6 @@ class Zoology(Model):
         self.model.device = device
         self.model.to(device)
         self.components = ["attention_input", "attention_output", "block_input", "block_output"]
-        if self.config.block_type == "MambaBlock":
-            self.components = ["mamba_input", "mamba_output", "block_input", "block_output"]
 
     
     def step(self, input_ids: torch.Tensor, labels: torch.Tensor):

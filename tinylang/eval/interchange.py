@@ -8,16 +8,15 @@ import random
 import numpy as np
 import re
 
-
-MEMO_IN = re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_input\.restored_prob")
-MEMO_OUT = re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_output\.restored_prob")
-MEMO_DIV_IN = re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_input\.restored_prob")
-MEMO_DIV_OUT = re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_output\.restored_prob")
 memo_map = {
-    "memo_in": MEMO_IN,
-    "memo_out": MEMO_OUT,
-    "memo_div_in": MEMO_DIV_IN,
-    "memo_div_out": MEMO_DIV_OUT,
+    "memo_in": re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_input\.restored_prob"),
+    "memo_out": re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_output\.restored_prob"),
+    "memo_div_in": re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_input\.restored_prob"),
+    "memo_div_out": re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_output\.restored_prob"),
+    "memo_in_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_input\.prob_diff"),
+    "memo_out_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_output\.prob_diff"),
+    "memo_div_in_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_input\.prob_diff"),
+    "memo_div_out_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_output\.prob_diff"),
 }
 
 # support for zoology models
@@ -151,11 +150,13 @@ class InterchangeEvaluator(Evaluator):
                             self.all_eval_stats[step][f"{label}.restored_prob"].append(intervened_prob.item())
                             self.all_eval_stats[step][f"{label_corrupted}.restored_prob"].append(corrupted_prob.item())
                             self.all_eval_stats[step][f"{label_original}.restored_prob"].append(original_prob.item())
+                            self.all_eval_stats[step][f"{label}.prob_diff"].append(intervened_prob.item() - corrupted_prob.item())
 
                             # logits
                             self.all_eval_stats[step][f"{label}.restored_logit"].append(intervened_logit.item())
                             self.all_eval_stats[step][f"{label_corrupted}.restored_logit"].append(corrupted_logit.item())
                             self.all_eval_stats[step][f"{label_original}.restored_logit"].append(original_logit.item())
+                            self.all_eval_stats[step][f"{label}.logit_diff"].append(intervened_logit.item() - corrupted_logit.item())
                             # self.all_eval_stats[step][f"{label}.percent_restored"].append(percent_restored.item())
 
                 # deregister intervention
@@ -164,7 +165,7 @@ class InterchangeEvaluator(Evaluator):
 
                 
     def post_eval(self, step: int):
-        for ending in ["kl_div", "restored_prob", "restored_logit"]:
+        for ending in ["kl_div", "restored_prob", "restored_logit", "prob_diff", "logit_diff"]:
             top = [(np.mean(v), k) for k, v in self.all_eval_stats[step].items() if k.endswith(ending)]
             for v, k in sorted(top):
                 print(f"{k:>80}: {v:.5f}")
