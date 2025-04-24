@@ -1,0 +1,26 @@
+import yaml
+from copy import deepcopy
+
+ablations = {
+    "mixer_type": ["attention", "hyena", "base_conv", "h3", "based"],
+    "n_embd": [64, 128, 256, 512],
+    "lr": [1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3],
+    # "lr": [1e-5],
+}
+
+with open("template.yaml", "r") as f:
+    config = yaml.safe_load(f)
+
+flops_unit = None
+
+for mixer_type in ablations["mixer_type"]:
+    for n_embd in ablations["n_embd"]:
+        for lr in ablations["lr"]:
+            new_config = deepcopy(config)
+            new_config["model"]["config"]["mixer_type"] = mixer_type
+            new_config["model"]["config"]["n_embd"] = n_embd
+            new_config["training"]["lr"] = lr
+            # save config
+            name = f"{mixer_type}_{n_embd}_{lr:.0e}"
+            with open(f"./{name}.yaml", "w") as f:
+                yaml.dump(new_config, f)

@@ -23,7 +23,7 @@ model:
   config:
     bias: false
     mixer_type: based
-    n_embd: 64
+    n_embd: 512
     n_head: 1
     n_layer: 2
     n_positions: 1024

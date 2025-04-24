@@ -22,15 +22,15 @@ model:
   class: Zoology
   config:
     bias: false
-    mixer_type: based
-    n_embd: 64
+    mixer_type: hyena
+    n_embd: 512
     n_head: 1
     n_layer: 2
     n_positions: 1024
     state_mixer_type: mlp
 training:
   eval_batch_size: 64
-  lr: 0.0001
+  lr: 0.0005
   num_eval_steps: 5
   num_train_steps: 50000
   train_batch_size: 16

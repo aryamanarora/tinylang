@@ -1,5 +1,6 @@
-from zoology.model import LanguageModel
-from zoology.config import ModelConfig
+# from zoology.model import LanguageModel
+# from zoology.config import ModelConfig
+from .zoology_arch import ModelConfig, LanguageModel
 from transformers.loss.loss_utils import ForCausalLMLoss
 from .model import Model
 import torch
@@ -133,9 +134,9 @@ class Zoology(Model):
         self.model.config = self.config
         self.model.device = device
         self.model.to(device)
-        self.components = ["attention_input", "attention_output", "block_output"]
+        self.components = ["attention_input", "attention_output", "block_input", "block_output"]
         if self.config.block_type == "MambaBlock":
-            self.components = ["mamba_input", "mamba_output", "block_output"]
+            self.components = ["mamba_input", "mamba_output", "block_input", "block_output"]
 
     
     def step(self, input_ids: torch.Tensor, labels: torch.Tensor):

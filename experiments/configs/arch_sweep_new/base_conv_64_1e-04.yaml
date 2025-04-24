@@ -22,7 +22,7 @@ model:
   class: Zoology
   config:
     bias: false
-    mixer_type: based
+    mixer_type: base_conv
     n_embd: 64
     n_head: 1
     n_layer: 2

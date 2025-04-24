@@ -22,7 +22,7 @@ model:
   class: Zoology
   config:
     bias: false
-    mixer_type: based
+    mixer_type: base_conv
     n_embd: 64
     n_head: 1
     n_layer: 2
@@ -30,7 +30,7 @@ model:
     state_mixer_type: mlp
 training:
   eval_batch_size: 64
-  lr: 0.0001
+  lr: 5.0e-05
   num_eval_steps: 5
   num_train_steps: 50000
   train_batch_size: 16

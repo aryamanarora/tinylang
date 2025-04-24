@@ -22,8 +22,8 @@ model:
   class: Zoology
   config:
     bias: false
-    mixer_type: based
-    n_embd: 64
+    mixer_type: h3
+    n_embd: 256
     n_head: 1
     n_layer: 2
     n_positions: 1024

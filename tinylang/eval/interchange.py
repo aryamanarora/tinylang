@@ -1,15 +1,11 @@
 from .eval import Evaluator
-from tinylang.model import Model, Zoology
-from zoology.model import LanguageModel
+from tinylang.model import Model, Zoology, LanguageModel
 from tinylang.language import Language
 import torch
 import plotnine as p9
-from collections import defaultdict
-import torch.nn as nn
 import pyvene as pv
 import random
 import numpy as np
-import matplotlib.pyplot as plt
 import re
 
 
@@ -71,18 +67,10 @@ class InterchangeEvaluator(Evaluator):
         hidden_states = outputs["hidden_states"]
         types = set([x["type"] for x in probing_schemas])
         
-        components = ["attention_input", "attention_output", "block_output"] if model.components is None else model.components
+        components = ["attention_input", "attention_output", "block_input", "block_output"] if model.components is None else model.components
         for component in components:
             for layer in range(model.n_layer):
-                true_layer = layer
-                if isinstance(model, Zoology):
-                    if component == "block_output":
-                        if layer != model.n_layer - 1:
-                            true_layer = layer + 1
-                            component = "block_input"
-                        else:
-                            component = "final_layernorm_input"
-                config = {"layer": true_layer, "component": component, "unit": "pos"}
+                config = {"layer": layer, "component": component, "unit": "pos"}
                 pv_config = pv.IntervenableConfig(config)
                 pv_gpt2 = pv.IntervenableModel(pv_config, model=model.model)
                 pv_gpt2.disable_model_gradients()
