@@ -119,12 +119,21 @@ class PCFG(Language):
         """Prepare the train and eval sets."""
         # we ignore train steps since we are generating on the fly
         self.evalsets = {"dev": {}, "test": {}}
-        for split in ["dev", "test"]:
+        if len(self.prohibited_pairs) == 0:
+            del self.evalsets["dev"]
+        stats = {}
+        for split in self.evalsets.keys():
             self.evalsets[split]["toks"], self.evalsets[split]["probing_schemas"] = [], []
             for _ in range(num_eval_steps * eval_batch_size):
                 tok, probing_schema = self.sample(split=split)
                 self.evalsets[split]["toks"].append(tok)
                 self.evalsets[split]["probing_schemas"].append(probing_schema)
+            
+            # compute stats
+            self.config_dict[f"summary/{split}/doc_length"] = np.mean([len(tok) for tok in self.evalsets[split]["toks"]])
+            self.config_dict[f"summary/{split}/query_orig_target_orig_dist"] = np.mean([np.abs(d["queries"]["query_item_orig"]["pos"] - d["queries"]["target_item_orig"]["pos"]) for d in self.evalsets[split]["probing_schemas"]])
+            self.config_dict[f"summary/{split}/query_query_orig_dist"] = np.mean([np.abs(d["queries"]["query_item_orig"]["pos"] - d["queries"]["query_item"]["pos"]) for d in self.evalsets[split]["probing_schemas"]])
+            self.config_dict[f"summary/{split}/query_target_orig_dist"] = np.mean([np.abs(d["queries"]["target_item_orig"]["pos"] - d["queries"]["query_item"]["pos"]) for d in self.evalsets[split]["probing_schemas"]])
 
     
     def prettify(self, toks: list[int], probing_schema: dict | None = None) -> str:

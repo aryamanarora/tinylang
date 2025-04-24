@@ -101,8 +101,6 @@ class Experiment:
 
         # load configs
         model = Model.from_config(config["model"])
-        dev_evaluators = [Evaluator.from_config(evaluator) for evaluator in config["evaluators"]]
-        test_evaluators = [Evaluator.from_config(evaluator) for evaluator in config["evaluators"]]
         training_config = TrainingConfig(**config["training"])
 
         # prepare train/eval sets
@@ -113,8 +111,13 @@ class Experiment:
             num_eval_steps=training_config.num_eval_steps,
         )
 
+        # evals
+        evaluators = {}
+        for split in language.evalsets.keys():
+            evaluators[split] = [Evaluator.from_config(evaluator) for evaluator in config["evaluators"]]
+
         # return experiment
-        return cls(model, language, {"dev": dev_evaluators, "test": test_evaluators}, training_config)
+        return cls(model, language, evaluators, training_config)
     
 
     def train(self):
