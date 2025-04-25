@@ -17,7 +17,7 @@ class QueryType(IntEnum):
     CHILD = 1
     SIBLING = 2
 
-Node = namedtuple("Node", ["label", "id", "head_id"])
+Node = namedtuple("Node", ["label", "id", "head_id", "depth"])
 
 class PCFG(Language):
     def __init__(
@@ -86,18 +86,18 @@ class PCFG(Language):
 
         # each nonterminal has a max depth
         # its immediate children must have a depth less than this
-        self.max_depths = {nt: np.random.randint(1, max_depth) for nt in self.nonterminals} if max_depth > 0 else None
+        self.max_depths = {nt: np.random.randint(1, max_depth + 1) for nt in self.nonterminals} if max_depth > 0 else None
 
         # make the rules
         # each nonterminal has a list of production rules
         self.rules = defaultdict(list)
         for nt in self.nonterminals:
-            num_rules = np.random.randint(1, max_rules_per_nt)
+            num_rules = np.random.randint(1, max_rules_per_nt + 1)
             # select acceptable nonterminals
-            nonterminals_subset = [x for x in self.nonterminals if self.max_depths[x] > self.max_depths[nt]] if self.max_depths else self.nonterminals
+            nonterminals_subset = [x for x in self.nonterminals if self.max_depths[x] > self.max_depths[nt]] if max_depth > 0 else self.nonterminals
             for _ in range(num_rules):
                 lhs = nt
-                rhs = np.random.choice(nonterminals_subset + self.terminals, size=np.random.randint(1, max_rhs_len), replace=False)
+                rhs = np.random.choice(nonterminals_subset + self.terminals, size=np.random.randint(1, max_rhs_len), replace=True)
                 self.rules[lhs].append(rhs)
         
         # for each nt, set the probability of its rules
@@ -121,19 +121,20 @@ class PCFG(Language):
         self.evalsets = {"dev": {}, "test": {}}
         if len(self.prohibited_pairs) == 0:
             del self.evalsets["dev"]
-        stats = {}
+        self.stats = {}
         for split in self.evalsets.keys():
             self.evalsets[split]["toks"], self.evalsets[split]["probing_schemas"] = [], []
+            self.stats[split] = defaultdict(list)
             for _ in range(num_eval_steps * eval_batch_size):
-                tok, probing_schema = self.sample(split=split)
+                tok, probing_schema, stats = self.sample(split=split, return_stats=True)
                 self.evalsets[split]["toks"].append(tok)
                 self.evalsets[split]["probing_schemas"].append(probing_schema)
+                for key in stats.keys():
+                    self.stats[split][key].append(stats[key])
             
-            # compute stats
-            self.config_dict[f"summary/{split}/doc_length"] = np.mean([len(tok) for tok in self.evalsets[split]["toks"]])
-            self.config_dict[f"summary/{split}/query_orig_target_orig_dist"] = np.mean([np.abs(d["queries"]["query_item_orig"]["pos"] - d["queries"]["target_item_orig"]["pos"]) for d in self.evalsets[split]["probing_schemas"]])
-            self.config_dict[f"summary/{split}/query_query_orig_dist"] = np.mean([np.abs(d["queries"]["query_item_orig"]["pos"] - d["queries"]["query_item"]["pos"]) for d in self.evalsets[split]["probing_schemas"]])
-            self.config_dict[f"summary/{split}/query_target_orig_dist"] = np.mean([np.abs(d["queries"]["target_item_orig"]["pos"] - d["queries"]["query_item"]["pos"]) for d in self.evalsets[split]["probing_schemas"]])
+            # log means to config dict
+            for key, value in self.stats[split].items():
+                self.config_dict[f"summary/{split}/{key}"] = np.mean(value).item()
 
     
     def prettify(self, toks: list[int], probing_schema: dict | None = None) -> str:
@@ -163,16 +164,16 @@ class PCFG(Language):
         """Generate a random sentence from the PCFG."""
         # the start symbol is a random nonterminal
         # (nt, id, head_id)
-        generated = [Node(str(np.random.choice(self.nonterminals, p=self.start_probs)), 0, None)]
+        generated = [Node(str(np.random.choice(self.nonterminals, p=self.start_probs)), 0, None, 0)]
         next_id = 1
         done = False
         depth = 0
         while not done:
             generated_new = []
             done_new = True
-            for nt, id, head_id in generated:
+            for nt, id, head_id, depth in generated:
                 if nt in self.terminals:
-                    generated_new.append(Node(nt, id, head_id))
+                    generated_new.append(Node(nt, id, head_id, depth))
                 else:
                     done_new = False
                     this_head_id = next_id
@@ -180,17 +181,17 @@ class PCFG(Language):
                     # first sample the head (placed on the left)
                     if self.head_position == "left":
                         head = np.random.choice(len(self.terminals), p=self.head_probs[nt])
-                        generated_new.append(Node(str(self.terminals[head]), this_head_id, head_id))
+                        generated_new.append(Node(str(self.terminals[head]), this_head_id, head_id, depth + 1))
                     
                     # then sample the rhs
                     rhs = np.random.choice(len(self.rules[nt]), p=self.rule_probs[nt])
                     for child in self.rules[nt][rhs]:
-                        generated_new.append(Node(str(child), next_id, this_head_id))
+                        generated_new.append(Node(str(child), next_id, this_head_id, depth + 1))
                         next_id += 1
                         
                     if self.head_position == "right":
                         head = np.random.choice(len(self.terminals), p=self.head_probs[nt])
-                        generated_new.append(Node(str(self.terminals[head]), this_head_id, head_id))
+                        generated_new.append(Node(str(self.terminals[head]), this_head_id, head_id, depth + 1))
 
             generated = generated_new
             done = done_new
@@ -211,7 +212,7 @@ class PCFG(Language):
         else:
             raise ValueError(f"Invalid query type: {relation}")
         
-    def sample(self, split: str="train"):
+    def sample(self, split: str="train", return_stats: bool=False):
         """Generate a document from the PCFG, i.e. a sentence, a query, and a response."""
         sentence = None
         while sentence is None:
@@ -227,6 +228,8 @@ class PCFG(Language):
 
             # check eligible query positions
             eligible_targets = list(range(len(sentence)))
+            all_heads = set([x.head_id for x in sentence])
+            parent_targets = [i for i in eligible_targets if sentence[i].id in all_heads]
             id_to_pos = {node.id: i for i, node in enumerate(sentence)}
             parent_to_children = defaultdict(list)
             for node in sentence:
@@ -236,8 +239,7 @@ class PCFG(Language):
 
             # parent queries only
             if self.no_child_queries and self.no_sibling_queries:
-                all_heads = set([x.head_id for x in sentence])
-                eligible_targets = [i for i in eligible_targets if sentence[i].id in all_heads]
+                eligible_targets = parent_targets
                 eligible_queries = {}
                 for target in eligible_targets:
                     target_label = int(sentence[target].label[1:])
@@ -351,6 +353,18 @@ class PCFG(Language):
         if len(self.acceptable_query_types) == 1:
             del probing_schema["queries"]["query_type"]
         
+        # return stats
+        if return_stats:
+            stats = {
+                "doc_length": len(sentence),
+                "query_orig_target_orig_dist": np.abs(probing_schema["queries"]["query_item_orig"]["pos"] - probing_schema["queries"]["target_item_orig"]["pos"]),
+                "query_query_orig_dist": np.abs(probing_schema["queries"]["query_item_orig"]["pos"] - probing_schema["queries"]["query_item"]["pos"]),
+                "query_target_orig_dist": np.abs(probing_schema["queries"]["target_item_orig"]["pos"] - probing_schema["queries"]["query_item"]["pos"]),
+                "branching_factor": (len(sentence) - 1) / len(all_heads),
+                "percent_non_unique": (len(sentence) - len(set([x.label for x in sentence]))) / len(sentence),
+                "depth": max([x.depth for x in sentence]),
+            }
+            return tokens, probing_schema, stats
         return tokens, probing_schema
     
     def batchify(self, toks: list[list], probing_schemas: list[dict], verbose: bool=False) -> dict:
