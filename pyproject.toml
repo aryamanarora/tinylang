@@ -38,6 +38,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["tinylang"]
 
+[tool.uv]
+default-groups = "all"
+no-build-isolation-package = ['zoology', 'causal-conv1d', 'mamba-ssm']
+
 [tool.uv.sources]
 zoology = { git = "https://github.com/aryamanarora/zoology.git" }
 pyvene = { git = "https://github.com/stanfordnlp/pyvene.git" }
