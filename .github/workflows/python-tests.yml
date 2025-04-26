@@ -17,6 +17,8 @@ jobs:
         echo "$HOME/.cargo/bin" >> $GITHUB_PATH
     - name: Install dependencies with uv
       run: |
+        uv venv
+        source .venv/bin/activate
         uv pip install setuptools wheel
         uv sync
     - name: Run tests
