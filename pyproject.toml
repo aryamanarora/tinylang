@@ -21,7 +21,6 @@ dependencies = [
     "pyvene",
     "pyyaml>=6.0.2",
     "scikit-learn>=1.6.1",
-    "setuptools>=79.0.0",
     "termcolor>=2.5.0",
     "torch>=2.5.0",
     "torchvision>=0.21.0",
@@ -29,7 +28,6 @@ dependencies = [
     "transformers>=4.48.2",
     "umap-learn>=0.5.7",
     "wandb>=0.19.0",
-    "wheel>=0.45.1",
     "zoology",
 ]
 

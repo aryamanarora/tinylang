@@ -3784,7 +3784,6 @@ dependencies = [
     { name = "pyvene" },
     { name = "pyyaml" },
     { name = "scikit-learn" },
-    { name = "setuptools" },
     { name = "termcolor" },
     { name = "torch" },
     { name = "torchvision" },
@@ -3792,7 +3791,6 @@ dependencies = [
     { name = "transformers" },
     { name = "umap-learn" },
     { name = "wandb" },
-    { name = "wheel" },
     { name = "zoology" },
 ]
 
@@ -3814,7 +3812,6 @@ requires-dist = [
     { name = "pyvene", git = "https://github.com/stanfordnlp/pyvene.git" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "scikit-learn", specifier = ">=1.6.1" },
-    { name = "setuptools", specifier = ">=79.0.0" },
     { name = "termcolor", specifier = ">=2.5.0" },
     { name = "torch", specifier = ">=2.5.0" },
     { name = "torchvision", specifier = ">=0.21.0" },
@@ -3822,7 +3819,6 @@ requires-dist = [
     { name = "transformers", specifier = ">=4.48.2" },
     { name = "umap-learn", specifier = ">=0.5.7" },
     { name = "wandb", specifier = ">=0.19.0" },
-    { name = "wheel", specifier = ">=0.45.1" },
     { name = "zoology", git = "https://github.com/aryamanarora/zoology.git" },
 ]
 
@@ -4188,15 +4184,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e6/30/fba0d96b4b5fbf5948ed3f4681f7da2f9f64512e1d303f94b4cc174c24a5/websocket_client-1.8.0.tar.gz", hash = "sha256:3239df9f44da632f96012472805d40a23281a991027ce11d2f45a6f24ac4c3da", size = 54648, upload_time = "2024-04-23T22:16:16.976Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5a/84/44687a29792a70e111c5c477230a72c4b957d88d16141199bf9acb7537a3/websocket_client-1.8.0-py3-none-any.whl", hash = "sha256:17b44cc997f5c498e809b22cdf2d9c7a9e71c02c8cc2b6c56e7c2d1239bfa526", size = 58826, upload_time = "2024-04-23T22:16:14.422Z" },
-]
-
-[[package]]
-name = "wheel"
-version = "0.45.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8a/98/2d9906746cdc6a6ef809ae6338005b3f21bb568bea3165cfc6a243fdc25c/wheel-0.45.1.tar.gz", hash = "sha256:661e1abd9198507b1409a20c02106d9670b2576e916d58f520316666abca6729", size = 107545, upload_time = "2024-11-23T00:18:23.513Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0b/2c/87f3254fd8ffd29e4c02732eee68a83a1d3c346ae39bc6822dcbcb697f2b/wheel-0.45.1-py3-none-any.whl", hash = "sha256:708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248", size = 72494, upload_time = "2024-11-23T00:18:21.207Z" },
 ]
 
 [[package]]
