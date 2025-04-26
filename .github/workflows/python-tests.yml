@@ -18,8 +18,6 @@ jobs:
     - name: Install dependencies with uv
       run: |
         uv sync
-        uv pip install pytest pytest-cov
-        uv add .[zoology] --no-build-isolation
     - name: Run tests
       run: |
         pytest tests/ -v 
