@@ -21,7 +21,8 @@ jobs:
         source .venv/bin/activate
         uv pip install setuptools wheel
         uv sync --no-install-package zoology --no-install-package causal-conv1d --no-install-package mamba-ssm
-        uv sync
+        # uv sync --no-build-isolation
     - name: Run tests
       run: |
-        uv run pytest tests/ -v 
+        source .venv/bin/activate
+        python -m pytest tests/ -v 
