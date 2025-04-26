@@ -17,6 +17,7 @@ dependencies = [
     "opt-einsum>=3.4.0",
     "plotnine",
     "pyarrow>=19.0.1",
+    "pytest>=8.3.5",
     "pyvene",
     "pyyaml>=6.0.2",
     "scikit-learn>=1.6.1",

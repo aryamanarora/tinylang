@@ -33,6 +33,9 @@ class PCFG(Language):
         no_child_queries: bool=False,
         max_length: int=1024,
         train_test_split: float=0.0,
+        transparent_nonterminals: bool=False,
+        unambiguous_queries: bool=False,
+        sample_first: str="target",
     ):
         super().__init__()
         self.PAD = 0
@@ -40,6 +43,8 @@ class PCFG(Language):
         self.EOS = 2
         self.TERMINAL_START = 3
         self.QUERY_START = self.TERMINAL_START + num_terminals
+        if transparent_nonterminals:
+            self.QUERY_START = self.QUERY_START + num_nonterminals
         self.vocab_size = self.QUERY_START + max(QueryType).value + 1
         self.id_to_token = {
             self.PAD: "<pad>",
@@ -70,6 +75,8 @@ class PCFG(Language):
             self.acceptable_query_types.append(QueryType.CHILD)
         if not self.no_sibling_queries:
             self.acceptable_query_types.append(QueryType.SIBLING)
+        self.unambiguous_queries = unambiguous_queries
+        self.sample_first = sample_first
 
         # are any pairs prohibited in the train set?
         if train_test_split > 0.0:
@@ -108,8 +115,19 @@ class PCFG(Language):
         
         # each nt has a distribution over terminals as its "head". this makes the PCFG transparent?
         self.head_probs = {}
-        for nt in self.nonterminals:
-            self.head_probs[nt] = np.random.dirichlet(np.ones(num_terminals))
+        for nt_idx, nt in enumerate(self.nonterminals):
+            if not transparent_nonterminals:
+                self.head_probs[nt] = np.random.dirichlet(np.ones(num_terminals))
+            else:
+                self.head_probs[nt] = np.zeros(num_terminals + num_nonterminals)
+                self.head_probs[nt][num_terminals + nt_idx] = 1
+
+        # modifications to make transparent
+        if transparent_nonterminals:
+            for nt_idx in range(num_nonterminals):
+                self.terminals.append(f"t{nt_idx + num_terminals}")
+                self.id_to_token[self.TERMINAL_START + num_terminals + nt_idx] = f"t{nt_idx + num_terminals}"
+            self.num_terminals = len(self.terminals)
         
         # finally, the start symbol has a distribution over nonterminals as its head
         self.start_probs = np.ones(num_nonterminals) / num_nonterminals
@@ -164,6 +182,55 @@ class PCFG(Language):
         """Generate a random sentence from the PCFG."""
         # the start symbol is a random nonterminal
         # (nt, id, head_id)
+        stack = [Node(str(np.random.choice(self.nonterminals, p=self.start_probs)), 0, None, 0)]
+        next_id = 1
+        generated = []
+        while len(stack) != 0 and len(stack) < self.max_length:
+            # check if we've reached the max length
+            if len(stack) >= self.max_length:
+                raise RecursionError("MAX_RECURSION_DEPTH or MAX_LENGTH reached")
+            
+            # pop a node from the stack, we will expand it
+            cur_node = stack.pop()
+            nt, id, head_id, depth = cur_node
+
+            # if it's a terminal, add it to the generated list and continue
+            if nt in self.terminals:
+                generated.append(Node(nt, id, head_id, depth))
+            # otherwise, it's a nonterminal and we expand it
+            else:
+                # head ids
+                this_head_id = next_id
+                next_id += 1
+
+                # sample a random rule
+                rhs = np.random.choice(len(self.rules[nt]), p=self.rule_probs[nt])
+                rhs = self.rules[nt][rhs]
+
+                # first right head
+                if self.head_position == "right":
+                    head = np.random.choice(len(self.terminals), p=self.head_probs[nt])
+                    stack.append(Node(str(self.terminals[head]), this_head_id, head_id, depth + 1))
+                
+                # children from rhs
+                for i in range(len(rhs) - 1, -1, -1):
+                    stack.append(Node(str(rhs[i]), next_id, this_head_id, depth + 1))
+                    next_id += 1
+
+                # the left head
+                if self.head_position == "left":
+                    head = np.random.choice(len(self.terminals), p=self.head_probs[nt])
+                    stack.append(Node(str(self.terminals[head]), this_head_id, head_id, depth + 1))
+
+        # convert ids to ints and return
+        for i in range(len(generated)):
+            generated[i] = Node(int(generated[i].label[1:]), generated[i].id, generated[i].head_id, generated[i].depth)
+        return generated
+                
+    def _sample2(self):
+        """Generate a random sentence from the PCFG."""
+        # the start symbol is a random nonterminal
+        # (nt, id, head_id)
         generated = [Node(str(np.random.choice(self.nonterminals, p=self.start_probs)), 0, None, 0)]
         next_id = 1
         done = False
@@ -199,6 +266,8 @@ class PCFG(Language):
             if depth > MAX_RECURSION_DEPTH or len(generated) > MAX_LENGTH:
                 raise RecursionError("MAX_RECURSION_DEPTH or MAX_LENGTH reached")
 
+        for i in range(len(generated)):
+            generated[i] = Node(int(generated[i].label[1:]), generated[i].id, generated[i].head_id, generated[i].depth)
         return generated
     
     def is_relation(self, sentence: list[Node], relation: QueryType, i: int, j: int) -> bool:
@@ -211,8 +280,56 @@ class PCFG(Language):
             return sentence[i].head_id == sentence[j].head_id and i != j
         else:
             raise ValueError(f"Invalid query type: {relation}")
+
+    def get_eligible_pairs(self, sentence: list[Node], split: str="train") -> tuple[dict, dict, dict]:
+        """Get the eligible (query, target) pairs for the sentence based on our constraints."""
+        eligible_pairs = {}
+
+        # we will construct a list of eligible (query, target) pairs for each query type
+        for query_type in self.acceptable_query_types:
+            eligible_pairs[query_type] = []
+
+            # traverse all pairs
+            for target in range(len(sentence)):
+                for query in range(len(sentence)):
+                    # first check train/test split
+                    if len(self.prohibited_pairs) > 0:
+                        if split in ["train", "dev"]:
+                            if (sentence[target].label, sentence[query].label) in self.prohibited_pairs:
+                                continue
+                        elif split == "test":
+                            if (sentence[target].label, sentence[query].label) not in self.prohibited_pairs:
+                                continue
+                    
+                    # second check if it satisfies the relation
+                    if self.is_relation(sentence, query_type, query, target):
+                        eligible_pairs[query_type].append((query, target))
+            
+        # now filter for rightmost instance of each child, for the queries
+        if self.unambiguous_queries:
+            # get rightmost instance of each terminal
+            rightmost_types = dict()
+            for i, node in enumerate(sentence):
+                rightmost_types[node.label] = max(rightmost_types.get(node.label, 0), i)
+            
+            # query must be the rightmost instance of its type
+            # TODO: still ambiguous for sibling queries!
+            for query_type in self.acceptable_query_types:
+                eligible_pairs[query_type] = [
+                    (query, target) for query, target in eligible_pairs[query_type] if rightmost_types[sentence[query].label] == query
+                ]
         
-    def sample(self, split: str="train", return_stats: bool=False):
+        # now we have a list of eligible (query, target) pairs for each query type
+        # let's also pass the eligible queries/targets for sampling
+        eligible_queries = {}
+        eligible_targets = {}
+        for query_type in self.acceptable_query_types:
+            eligible_queries[query_type] = list(set([query for query, _ in eligible_pairs[query_type]]))
+            eligible_targets[query_type] = list(set([target for _, target in eligible_pairs[query_type]]))
+        
+        return eligible_pairs, eligible_queries, eligible_targets
+
+    def sample(self, split: str="train", return_stats: bool=False, return_sentence: bool=False):
         """Generate a document from the PCFG, i.e. a sentence, a query, and a response."""
         sentence = None
         while sentence is None:
@@ -225,78 +342,46 @@ class PCFG(Language):
             except RecursionError:
                 sentence = None
                 continue
-
-            # check eligible query positions
-            eligible_targets = list(range(len(sentence)))
-            all_heads = set([x.head_id for x in sentence])
-            parent_targets = [i for i in eligible_targets if sentence[i].id in all_heads]
-            id_to_pos = {node.id: i for i, node in enumerate(sentence)}
-            parent_to_children = defaultdict(list)
-            for node in sentence:
-                if node.head_id is None:
-                    continue
-                parent_to_children[id_to_pos[node.head_id]].append(id_to_pos[node.id])
-
-            # parent queries only
-            if self.no_child_queries and self.no_sibling_queries:
-                eligible_targets = parent_targets
-                eligible_queries = {}
-                for target in eligible_targets:
-                    target_label = int(sentence[target].label[1:])
-                    children = parent_to_children[target]
-                    if len(self.prohibited_pairs) > 0:
-                        if split in ["train", "dev"]:
-                            children = [c for c in children if (target_label, int(sentence[c].label[1:])) not in self.prohibited_pairs]
-                        elif split == "test":
-                            children = [c for c in children if (target_label, int(sentence[c].label[1:])) in self.prohibited_pairs]
-                    if len(children) > 0:
-                        eligible_queries[target] = children
-                
-                # clear empty targets
-                eligible_targets = [t for t in eligible_targets if t in eligible_queries]
             
-            # if no eligible positions, try again
+            # get eligible (query, target) pairs; if no eligible pairs, try again
+            eligible_pairs, eligible_queries, eligible_targets = self.get_eligible_pairs(sentence, split)
             if len(eligible_targets) == 0:
                 sentence = None
 
-        # we first uniformly sample the target item, this way the target distribution is uniform
-        # models cannot easily cheat by predicting some likely targets!
-        target_item = np.random.choice(eligible_targets)
-        target_item_pos = 1 + target_item
-
-        # generate the possible queries leading to the target item
-        possible_queries_and_targets = {}
-        if self.no_child_queries and self.no_sibling_queries:
-            possible_queries_and_targets[QueryType.PARENT] = eligible_queries[target_item]
+        # first sample query or target depending on self.sample_first
+        query_type = np.random.choice(list(eligible_pairs.keys()))
+        if self.sample_first == "query":
+            query_item = np.random.choice(eligible_queries[query_type])
+            target_item = np.random.choice([t for q, t in eligible_pairs[query_type] if q == query_item])
+        elif self.sample_first == "target":
+            target_item = np.random.choice(eligible_targets[query_type])
+            query_item = np.random.choice([q for q, t in eligible_pairs[query_type] if t == target_item])
         else:
-            for query_type in self.acceptable_query_types:
-                possible_queries_and_targets[query_type] = [i for i in range(len(sentence)) if self.is_relation(sentence, query_type, i, target_item)]
-        tokens = [self.BOS] + [int(x.label[1:]) + self.TERMINAL_START for x in sentence]
+            raise NotImplementedError(f"sample_first={self.sample_first} not implemented")
+
+        # construct the sentence
+        tokens = [self.BOS] + [x.label + self.TERMINAL_START for x in sentence]
+
+        # get positions of target and query items
+        target_item_pos = 1 + target_item
+        query_item_pos = 1 + query_item
 
         # get target item token
-        target_item = int(sentence[target_item].label[1:]) + self.TERMINAL_START
-
-        # sample a query type
-        acceptable_query_types = [q for q in possible_queries_and_targets if len(possible_queries_and_targets[q]) > 0]
-        query_type = np.random.choice(acceptable_query_types)
-
-        # sample a query item
-        query_item = np.random.choice(possible_queries_and_targets[query_type])
-        query_item_pos = 1 + query_item
+        target_item = sentence[target_item].label + self.TERMINAL_START
 
         # get the target distribution
         target_distribution = np.zeros(self.vocab_size)
         all_target_pos = []
         for item in range(len(sentence)):
-            if not self.is_relation(sentence, query_type, query_item, item):
+            if (query_item, item) not in eligible_pairs[query_type]:
                 continue
-            tok = int(sentence[item].label[1:]) + self.TERMINAL_START
+            tok = sentence[item].label + self.TERMINAL_START
             target_distribution[tok] += 1
             all_target_pos.append(1 + item)
         target_distribution = target_distribution / np.sum(target_distribution)
 
-        # sample a target item
-        query_item = int(sentence[query_item].label[1:]) + self.TERMINAL_START
+        # get query item token
+        query_item = sentence[query_item].label + self.TERMINAL_START
 
         # generate the overall sequence to train on
         if len(self.acceptable_query_types) == 1:
@@ -355,6 +440,7 @@ class PCFG(Language):
         
         # return stats
         if return_stats:
+            all_heads = set([x.head_id for x in sentence if x.head_id is not None])
             stats = {
                 "doc_length": len(sentence),
                 "query_orig_target_orig_dist": np.abs(probing_schema["queries"]["query_item_orig"]["pos"] - probing_schema["queries"]["target_item_orig"]["pos"]),
@@ -364,6 +450,8 @@ class PCFG(Language):
                 "percent_non_unique": (len(sentence) - len(set([x.label for x in sentence]))) / len(sentence),
                 "depth": max([x.depth for x in sentence]),
             }
+            if return_sentence:
+                stats["sentence"] = sentence
             return tokens, probing_schema, stats
         return tokens, probing_schema
     

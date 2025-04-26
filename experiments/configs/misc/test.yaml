@@ -18,11 +18,13 @@ language:
     num_nonterminals: 40
     num_terminals: 20
     train_test_split: 0.0
+    transparent_nonterminals: false
+    unambiguous_queries: true
 model:
   class: Zoology
   config:
     bias: false
-    mixer_type: based
+    mixer_type: attention
     n_embd: 64
     n_head: 1
     n_layer: 2
