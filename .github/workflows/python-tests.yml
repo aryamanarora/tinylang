@@ -20,6 +20,7 @@ jobs:
         uv venv
         source .venv/bin/activate
         uv pip install setuptools wheel
+        uv sync --no-install-package zoology
         uv sync
     - name: Run tests
       run: |
