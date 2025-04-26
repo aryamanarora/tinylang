@@ -20,7 +20,7 @@ jobs:
         uv venv
         source .venv/bin/activate
         uv pip install setuptools wheel
-        uv sync --no-install-package zoology causal-conv1d mamba-ssm
+        uv sync --no-install-package zoology --no-install-package causal-conv1d --no-install-package mamba-ssm
         uv sync
     - name: Run tests
       run: |
