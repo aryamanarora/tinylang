@@ -324,6 +324,9 @@ class PCFG(Language):
         eligible_queries = {}
         eligible_targets = {}
         for query_type in self.acceptable_query_types:
+            if len(eligible_pairs[query_type]) == 0:
+                del eligible_pairs[query_type]
+                continue
             eligible_queries[query_type] = list(set([query for query, _ in eligible_pairs[query_type]]))
             eligible_targets[query_type] = list(set([target for _, target in eligible_pairs[query_type]]))
         

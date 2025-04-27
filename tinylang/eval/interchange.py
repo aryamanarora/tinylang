@@ -1,6 +1,7 @@
 from .eval import Evaluator
 from tinylang.model import Model, Zoology, LanguageModel
 from tinylang.language import Language
+from collections import defaultdict, Counter
 import torch
 import plotnine as p9
 import pyvene as pv
@@ -68,6 +69,7 @@ class InterchangeEvaluator(Evaluator):
         
         components = ["attention_input", "attention_output", "block_input", "block_output"] if model.components is None else model.components
         for component in components:
+            maxes_layer = defaultdict(lambda: defaultdict(lambda: (0, "nothing")))
             for layer in range(model.n_layer):
                 config = {"layer": layer, "component": component, "unit": "pos"}
                 pv_config = pv.IntervenableConfig(config)
@@ -75,6 +77,7 @@ class InterchangeEvaluator(Evaluator):
                 pv_gpt2.disable_model_gradients()
 
                 for label_type in probing_schemas[0]["target_distributions"]:
+                    maxes_pos = defaultdict(lambda: (0, "nothing"))
                     for query in probing_schemas[0]["queries"]:
 
                         all_inputs, all_corrupted_inputs = [], []
@@ -143,14 +146,17 @@ class InterchangeEvaluator(Evaluator):
                             original_logit = original_logits[pos_to_check][orig_output]
                             # percent_restored = (intervened_prob - corrupted_prob) / (original_prob - corrupted_prob)
 
-                            label = f"{layer}.{t}.{label_type}.{query}.{component}"
-                            label_original = f"original.{t}.{label_type}.{query}.{component}"
-                            label_corrupted = f"corrupted.{t}.{label_type}.{query}.{component}"
+                            label_wo_layer = f"{t}.{label_type}.{query}.{component}"
+                            label = f"{layer}.{label_wo_layer}"
+                            label_original = f"original.{label_wo_layer}"
+                            label_corrupted = f"corrupted.{label_wo_layer}"
                             self.all_eval_stats[step][f"{label}.kl_div"].append(kl_div.item())
                             self.all_eval_stats[step][f"{label}.restored_prob"].append(intervened_prob.item())
                             self.all_eval_stats[step][f"{label_corrupted}.restored_prob"].append(corrupted_prob.item())
                             self.all_eval_stats[step][f"{label_original}.restored_prob"].append(original_prob.item())
                             self.all_eval_stats[step][f"{label}.prob_diff"].append(intervened_prob.item() - corrupted_prob.item())
+                            maxes_pos[batch_idx] = max(maxes_pos[batch_idx], (intervened_prob.item() - corrupted_prob.item(), query))
+                            maxes_layer[label_wo_layer][batch_idx] = max(maxes_layer[label_wo_layer][batch_idx], (intervened_prob.item() - corrupted_prob.item(), str(layer)))
 
                             # logits
                             self.all_eval_stats[step][f"{label}.restored_logit"].append(intervened_logit.item())
@@ -159,10 +165,21 @@ class InterchangeEvaluator(Evaluator):
                             self.all_eval_stats[step][f"{label}.logit_diff"].append(intervened_logit.item() - corrupted_logit.item())
                             # self.all_eval_stats[step][f"{label}.percent_restored"].append(percent_restored.item())
 
+                    # log max counts
+                    query_counts = Counter([q for _, q in maxes_pos.values()])
+                    for query in list(probing_schemas[0]["queries"].keys()) + ["nothing"]:
+                        label = f"{layer}.{t}.{label_type}.{query}.{component}"
+                        self.all_eval_stats[step][f"{label}.max_perc"].append(query_counts[query] / len(maxes_pos))
+
                 # deregister intervention
                 pv_gpt2._cleanup_states()
                 torch.cuda.empty_cache()
 
+            for subset in maxes_layer:
+                layer_counts = Counter([q for _, q in maxes_layer[subset].values()])
+                for layer in [str(x) for x in range(model.n_layer)] + ["nothing"]:
+                    label = f"{layer}.{subset}"
+                    self.all_eval_stats[step][f"{label}.max_perc_layer"].append(layer_counts[layer] / len(maxes_layer[subset]))
                 
     def post_eval(self, step: int):
         for ending in ["kl_div", "restored_prob", "restored_logit", "prob_diff", "logit_diff"]:

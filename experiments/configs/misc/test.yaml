@@ -6,20 +6,27 @@ evaluators:
   config:
     run_every_n_steps: 400
 language:
-  class: PCFG
+  # class: PCFG
+  # config:
+  #   head_position: right
+  #   mask_nonquery: true
+  #   max_depth: 10
+  #   max_rhs_len: 10
+  #   max_rules_per_nt: 5
+  #   no_child_queries: true
+  #   no_sibling_queries: true
+  #   num_nonterminals: 40
+  #   num_terminals: 20
+  #   train_test_split: 0.0
+  #   transparent_nonterminals: false
+  #   unambiguous_queries: true
+  class: "AR"
   config:
-    head_position: left
-    mask_nonquery: true
-    max_depth: 10
-    max_rhs_len: 10
-    max_rules_per_nt: 5
-    no_child_queries: true
-    no_sibling_queries: true
-    num_nonterminals: 40
-    num_terminals: 20
-    train_test_split: 0.0
-    transparent_nonterminals: false
-    unambiguous_queries: true
+    num_kv: 20
+    max_length: 20
+    min_length: 20
+    query_type: "key"
+    mask_nonquery: False
 model:
   class: Zoology
   config:
@@ -32,7 +39,7 @@ model:
     state_mixer_type: mlp
 training:
   eval_batch_size: 64
-  lr: 0.0001
+  lr: 0.005
   num_eval_steps: 5
   num_train_steps: 50000
-  train_batch_size: 16
+  train_batch_size: 64
