@@ -4,7 +4,7 @@ evaluators:
     run_every_n_steps: 200
 - class: InterchangeEvaluator
   config:
-    run_every_n_steps: 400
+    run_every_n_steps: 1000
 language:
   class: PCFG
   config:
@@ -20,18 +20,11 @@ language:
     train_test_split: 0.0
     transparent_nonterminals: false
     unambiguous_queries: true
-  # class: "AR"
-  # config:
-  #   num_kv: 20
-  #   max_length: 20
-  #   min_length: 20
-  #   query_type: "key"
-  #   mask_nonquery: true
 model:
   class: Zoology
   config:
     bias: false
-    mixer_type: attention
+    mixer_type: based
     n_embd: 64
     n_head: 1
     n_layer: 2
@@ -39,7 +32,9 @@ model:
     state_mixer_type: mlp
 training:
   eval_batch_size: 64
-  lr: 0.005
+  lr: 0.0001
   num_eval_steps: 5
   num_train_steps: 50000
-  train_batch_size: 64
+  train_batch_size: 16
+  warmup_percentage: 0.1
+  weight_decay: 0.1

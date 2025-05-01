@@ -48,13 +48,16 @@ class AR(Language):
     def prepare_sets(self, train_batch_size: int, eval_batch_size: int, num_train_steps: int, num_eval_steps: int):
         """Prepare the train and eval sets."""
         # we ignore train steps since we are generating on the fly
-        self.eval_toks, self.eval_probing_schemas = [], []
+        self.evalsets = {"test": {
+            "toks": [],
+            "probing_schemas": [],
+        }}
         for _ in range(num_eval_steps * eval_batch_size):
-            tok, probing_schema = self.sample()
-            self.eval_toks.append(tok)
-            self.eval_probing_schemas.append(probing_schema)
+            tok, probing_schema = self.sample(split="test")
+            self.evalsets["test"]["toks"].append(tok)
+            self.evalsets["test"]["probing_schemas"].append(probing_schema)
     
-    def sample(self):
+    def sample(self, split: str="test"):
         """Generate a random sentence from the AR."""
         num_sample = random.randint(self.min_length // 2, self.max_length // 2)
         keys = list(range(self.num_kv // 2))
@@ -162,18 +165,18 @@ class AR(Language):
     def get_train_step(self, step: int, batch_size: int, verbose: bool = False) -> dict:
         toks, probing_schemas = [], []
         for _ in range(batch_size):
-            tok, probing_schema = self.sample()
+            tok, probing_schema = self.sample(split="train")
             toks.append(tok)
             probing_schemas.append(probing_schema)
 
         return self.batchify(toks, probing_schemas, verbose=verbose)
 
 
-    def get_eval_step(self, step: int, batch_size: int) -> dict:
+    def get_eval_step(self, step: int, batch_size: int, split: str="test") -> dict:
         """Get an eval step."""
-        batch_start, batch_end = step * batch_size, min(len(self.eval_toks), (step + 1) * batch_size)
+        batch_start, batch_end = step * batch_size, min(len(self.evalsets[split]["toks"]), (step + 1) * batch_size)
         return self.batchify(
-            self.eval_toks[batch_start:batch_end],
-            self.eval_probing_schemas[batch_start:batch_end],
+            self.evalsets[split]["toks"][batch_start:batch_end],
+            self.evalsets[split]["probing_schemas"][batch_start:batch_end],
             verbose=True,
         )

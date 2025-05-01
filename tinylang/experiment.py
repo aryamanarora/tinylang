@@ -34,6 +34,7 @@ class TrainingConfig:
         verbose: bool = False,
         wandb: bool = False,
         weight_decay: float = 0.0,
+        warmup_percentage: float = 0.0,
     ):
         self.train_batch_size = train_batch_size
         self.eval_batch_size = eval_batch_size
@@ -45,8 +46,21 @@ class TrainingConfig:
         self.verbose = verbose
         self.wandb = wandb
         self.weight_decay = weight_decay
+        self.warmup_percentage = warmup_percentage
 
+
+def get_linear_warmup_flat_schedule(optimizer, total_steps, warmup_percentage):
+    warmup_steps = int(total_steps * warmup_percentage)
+
+    def lr_lambda(current_step):
+        if current_step < warmup_steps:
+            return float(current_step) / max(1, warmup_steps)
+        else:
+            return 1.0
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
         
+
 class Experiment:
     def __init__(
         self,
@@ -67,6 +81,11 @@ class Experiment:
             self.model.model.parameters(),
             lr=self.training_config.lr,
             weight_decay=self.training_config.weight_decay,
+        )
+        self.scheduler = get_linear_warmup_flat_schedule(
+            self.optimizer,
+            total_steps=self.training_config.num_train_steps,
+            warmup_percentage=self.training_config.warmup_percentage,
         )
 
         # set up log dir
@@ -144,6 +163,7 @@ class Experiment:
             if step != self.training_config.num_train_steps:
                 train_loss = self.train_step(step)
                 eval_stats["train/loss"] = train_loss
+                eval_stats["train/lr"] = self.scheduler.get_last_lr()[0]
                 if self.verbose:
                     iterator.set_postfix(loss=train_loss)
 
@@ -176,6 +196,7 @@ class Experiment:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        self.scheduler.step()
 
         # clear memory
         del inputs
@@ -241,3 +262,4 @@ class Experiment:
 
                 # save the df as csv
                 evaluator.df.to_csv(os.path.join(self.training_config.log_dir, f"{split}/{str(evaluator)}.csv"), index=False)
+                #
