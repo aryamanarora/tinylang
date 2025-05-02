@@ -14,3 +14,6 @@ wheels/
 experiments/logs*/*
 *.out
 wandb/
+
+# Mac
+.DS_Store
