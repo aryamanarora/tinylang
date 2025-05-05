@@ -11,9 +11,12 @@ wheels/
 .ipynb_checkpoints/
 
 # Logs
-experiments/logs*/*
 *.out
 wandb/
 
 # Mac
 .DS_Store
+
+# dont check in logs
+experiments/logs*/*
+subspace/logs/*
