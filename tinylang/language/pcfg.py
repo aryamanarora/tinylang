@@ -33,6 +33,7 @@ class PCFG(Language):
         no_child_queries: bool=False,
         max_length: int=1024,
         train_test_split: float=0.0,
+        tts_temp: float=0.0,
         transparent_nonterminals: bool=False,
         unambiguous_queries: bool=False,
         sample_first: str="target",
@@ -86,6 +87,8 @@ class PCFG(Language):
             self.prohibited_pairs = set([(i, j) for i in range(self.num_terminals) for j in range(self.num_terminals) if self.blacklist_matrix[i, j] == 1])
         else:
             self.prohibited_pairs = set()
+        
+        self.tts_temp = tts_temp
         
         # make the terminals and nonterminals
         self.terminals = [f"t{i}" for i in range(num_terminals)]
@@ -296,7 +299,9 @@ class PCFG(Language):
                     if len(self.prohibited_pairs) > 0:
                         if split in ["train", "dev"]:
                             if (sentence[target].label, sentence[query].label) in self.prohibited_pairs:
-                                continue
+                                # some pairs are 'rare'
+                                if np.random.uniform() > self.tts_temp:
+                                    continue
                         elif split == "test":
                             if (sentence[target].label, sentence[query].label) not in self.prohibited_pairs:
                                 continue
