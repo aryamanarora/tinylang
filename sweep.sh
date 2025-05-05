@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # given a folder of yaml files, run the sweep
 # folder should be required as an argument
 
