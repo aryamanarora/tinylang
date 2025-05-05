@@ -31,6 +31,10 @@ class Llama(Model):
         )
         self.model = LlamaForCausalLM(self.config).to(device)
         self.model.init_weights()
+
+        self.model.config = self.config
+        self.model.to(device)
+        self.components = ["attention_input", "attention_output", "block_input", "block_output"]
     
     def step(self, input_ids: torch.Tensor, labels: torch.Tensor):
         """Run a single step.
@@ -53,3 +57,23 @@ class Llama(Model):
 
     def save(self, path: str):
         self.model.save_pretrained(path)
+
+    @classmethod
+    def from_pretrained(cls, path: str, device: torch.device | None = None):
+        
+        model = LlamaForCausalLM.from_pretrained(path)
+        
+        inst = cls(
+            vocab_size=model.config.vocab_size,
+            n_positions=model.config.max_position_embeddings,
+            n_embd=model.config.hidden_size,
+            n_layer=model.config.num_hidden_layers,
+            n_head=model.config.num_attention_heads,
+            n_inner=model.config.intermediate_size,
+            rope_theta=model.config.rope_theta,
+            device=device,
+        )
+        
+        inst.model = model.to(device)
+        
+        return inst

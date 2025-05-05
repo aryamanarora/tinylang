@@ -41,10 +41,11 @@ packages = ["tinylang"]
 [tool.uv]
 default-groups = "all"
 no-build-isolation-package = ['zoology', 'causal-conv1d', 'mamba-ssm']
+package = true
 
 [tool.uv.sources]
-zoology = { git = "https://github.com/aryamanarora/zoology.git" }
 pyvene = { git = "https://github.com/stanfordnlp/pyvene.git" }
+zoology = { git = "https://github.com/aryamanarora/zoology.git" }
 
 [project.scripts]
 tinylang = "tinylang.main:main"
