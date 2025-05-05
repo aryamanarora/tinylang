@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 # given a folder of yaml files, run the sweep
 # folder should be required as an argument
 
