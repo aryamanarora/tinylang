@@ -9,9 +9,39 @@ import torch.nn as nn
 from zoology.model import ModelConfig, StochasticDepth, TokenEmbeddings, _init_weights
 from functools import partial
 
+from zoology.mixers.mamba_ssm.triton.layernorm import RMSNorm
+from mamba_ssm.modules.mamba_simple import Mamba
+import torch
+from typing import Optional
+
+
 class MambaBlock(nn.Module):
-    def __init__(self, config: ModelConfig, layer_idx: int):
-        raise NotImplementedError("MambaBlock is not implemented")
+    def __init__(
+        self, config, fused_add_norm=False, residual_in_fp32=True, norm_epsilon=1e-5, **factory_kwargs
+    ):
+        super().__init__()
+        d_model = config.d_model
+        self.residual_in_fp32 = residual_in_fp32
+        self.fused_add_norm = fused_add_norm
+        self.sequence_mixer = Mamba(d_model, **factory_kwargs, **config.sequence_mixer.kwargs)
+        self.norm = RMSNorm(d_model, eps=norm_epsilon)
+
+
+    def forward(
+        self, residual: Optional[torch.Tensor] = None, inference_params=None
+    ):
+        r"""Pass the input through the encoder layer.
+
+        Args:
+            hidden_states: the sequence to the encoder layer (required).
+            residual: hidden_states = Mixer(LN(residual))
+        """
+        hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
+        if self.residual_in_fp32:
+            residual = residual.to(torch.float32)
+        hidden_states = self.sequence_mixer(hidden_states, inference_params=inference_params)
+        residual = (residual + hidden_states) if residual is not None else hidden_states
+        return residual
 
 
 class Mamba2Block(nn.Module):

@@ -1,6 +1,6 @@
 # from zoology.model import LanguageModel
 # from zoology.config import ModelConfig
-from .zoology_arch import ModelConfig, LanguageModel
+from .arch.zoology import ModelConfig, LanguageModel
 from transformers.loss.loss_utils import ForCausalLMLoss
 from .model import Model
 import torch
@@ -28,6 +28,7 @@ class Zoology(Model):
         input_seq_len = n_positions
         MIXERS = {
             "attention": dict(
+                # name="tinylang.model.MHA",
                 name="zoology.mixers.attention.MHA",
                 kwargs={
                     "dropout": 0.0,
@@ -113,7 +114,7 @@ class Zoology(Model):
         # add MLP or GLU to model
         state_mixer = dict(name="torch.nn.Identity", kwargs={})
         assert n_inner % n_embd == 0, "n_inner must be divisible by n_embd"
-        if state_mixer_type in ["mlp", "glu"]:
+        if state_mixer_type in ["mlp", "glu"] and mixer_type != "mamba":
             name = state_mixer_type.upper()
             state_mixer = dict(name=f"zoology.mixers.mlp.{name}", kwargs={"hidden_mult": n_inner // n_embd})
 
@@ -131,7 +132,7 @@ class Zoology(Model):
             drop_path=0.0,
             layer_norm_epsilon=1e-5,
             pad_vocab_size_multiple=1,
-            block_type="TransformerBlock",
+            block_type="TransformerBlock" if mixer_type != "mamba" else "MambaBlock",
             name="default",
         )
         self.model = LanguageModel(self.config)
@@ -141,6 +142,8 @@ class Zoology(Model):
         self.model.device = device
         self.model.to(device)
         self.components = ["attention_input", "attention_output", "block_input", "block_output"]
+        if mixer_type != "mamba":
+            self.components.extend(["mlp_input", "mlp_output"])
 
     
     def step(self, input_ids: torch.Tensor, labels: torch.Tensor):

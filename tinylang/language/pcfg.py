@@ -4,6 +4,7 @@ import numpy as np
 from enum import IntEnum
 import torch
 import termcolor
+from tqdm import tqdm
 
 
 COLORS = ["red", "green", "blue", "yellow", "magenta", "cyan", "light_red", "light_green", "light_blue", "light_yellow", "light_magenta", "light_cyan"]
@@ -37,6 +38,7 @@ class PCFG(Language):
         transparent_nonterminals: bool=False,
         unambiguous_queries: bool=False,
         sample_first: str="target",
+        prepare_train_set: bool=False,
     ):
         super().__init__()
         self.PAD = 0
@@ -78,6 +80,7 @@ class PCFG(Language):
             self.acceptable_query_types.append(QueryType.SIBLING)
         self.unambiguous_queries = unambiguous_queries
         self.sample_first = sample_first
+        self.prepare_train_set = prepare_train_set
 
         # are any pairs prohibited in the train set?
         if train_test_split > 0.0:
@@ -138,11 +141,21 @@ class PCFG(Language):
 
     def prepare_sets(self, train_batch_size: int, eval_batch_size: int, num_train_steps: int, num_eval_steps: int):
         """Prepare the train and eval sets."""
-        # we ignore train steps since we are generating on the fly
+        # train set?
+        if self.prepare_train_set:
+            self.train_set = defaultdict(list)
+            for _ in tqdm(range(num_train_steps * train_batch_size), desc="Preparing train set"):
+                tok, probing_schema = self.sample(split="train", return_stats=False)
+                self.train_set["toks"].append(tok)
+                self.train_set["probing_schemas"].append(probing_schema)
+
+        # we keep separate dev and test sets, unless theres no train/test split
         self.evalsets = {"dev": {}, "test": {}}
         if len(self.prohibited_pairs) == 0:
             del self.evalsets["dev"]
         self.stats = {}
+
+        # generate eval sets
         for split in self.evalsets.keys():
             self.evalsets[split]["toks"], self.evalsets[split]["probing_schemas"] = [], []
             self.stats[split] = defaultdict(list)
@@ -497,13 +510,21 @@ class PCFG(Language):
 
     
     def get_train_step(self, step: int, batch_size: int, verbose: bool = False) -> dict:
-        toks, probing_schemas = [], []
-        for _ in range(batch_size):
-            tok, probing_schema = self.sample(split="train")
-            toks.append(tok)
-            probing_schemas.append(probing_schema)
+        if self.prepare_train_set:
+            batch_start, batch_end = step * batch_size, min(len(self.train_set["toks"]), (step + 1) * batch_size)
+            return self.batchify(
+                self.train_set["toks"][batch_start:batch_end],
+                self.train_set["probing_schemas"][batch_start:batch_end],
+                verbose=verbose,
+            )
+        else:
+            toks, probing_schemas = [], []
+            for _ in range(batch_size):
+                tok, probing_schema = self.sample(split="train")
+                toks.append(tok)
+                probing_schemas.append(probing_schema)
 
-        return self.batchify(toks, probing_schemas, verbose=verbose)
+            return self.batchify(toks, probing_schemas, verbose=verbose)
 
 
     def get_eval_step(self, step: int, batch_size: int, split: str="test") -> dict:
