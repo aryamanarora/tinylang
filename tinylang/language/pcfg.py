@@ -452,6 +452,9 @@ class PCFG(Language):
                 "branching_factor": (len(sentence) - 1) / len(all_heads),
                 "percent_non_unique": (len(sentence) - len(set([x.label for x in sentence]))) / len(sentence),
                 "depth": max([x.depth for x in sentence]),
+                "eligible_pairs": len(eligible_pairs[query_type]),
+                "eligible_queries": len(eligible_queries[query_type]),
+                "eligible_targets": len(eligible_targets[query_type]),
             }
             if return_sentence:
                 stats["sentence"] = sentence

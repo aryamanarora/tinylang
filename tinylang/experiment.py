@@ -261,5 +261,5 @@ class Experiment:
                 evaluator.plot(log_dir=self.training_config.log_dir)
 
                 # save the df as csv
+                os.makedirs(os.path.join(self.training_config.log_dir, f"{split}"), exist_ok=True)
                 evaluator.df.to_csv(os.path.join(self.training_config.log_dir, f"{split}/{str(evaluator)}.csv"), index=False)
-                #
