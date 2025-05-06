@@ -18,6 +18,14 @@ memo_map = {
     "memo_out_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_output\.prob_diff"),
     "memo_div_in_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_input\.prob_diff"),
     "memo_div_out_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_output\.prob_diff"),
+    "memo_logit_in": re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_input\.restored_logit"),
+    "memo_logit_out": re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_output\.restored_logit"),
+    "memo_logit_div_in": re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_input\.restored_logit"),
+    "memo_logit_div_out": re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_output\.restored_logit"),
+    "memo_logit_in_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_input\.logit_diff"),
+    "memo_logit_out_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.query_item_orig\.attention_output\.logit_diff"),
+    "memo_logit_div_in_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_input\.logit_diff"),
+    "memo_logit_div_out_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_output\.logit_diff")
 }
 
 # support for zoology models
