@@ -8,7 +8,7 @@ import os
 import numpy as np
 import random
 import wandb
-import pickle
+from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
 
 # fix all seeds
 torch.manual_seed(42)
@@ -35,6 +35,7 @@ class TrainingConfig:
         weight_decay: float = 0.0,
         warmup_percentage: float = 0.0,
         num_train_epochs: int = 1,
+        cosine: bool = False,
     ):
         self.train_batch_size = train_batch_size
         self.eval_batch_size = eval_batch_size
@@ -48,18 +49,7 @@ class TrainingConfig:
         self.weight_decay = weight_decay
         self.warmup_percentage = warmup_percentage
         self.num_train_epochs = num_train_epochs
-
-
-def get_linear_warmup_flat_schedule(optimizer, total_steps, warmup_percentage):
-    warmup_steps = int(total_steps * warmup_percentage)
-
-    def lr_lambda(current_step):
-        if current_step < warmup_steps:
-            return float(current_step) / max(1, warmup_steps)
-        else:
-            return 1.0
-
-    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+        self.cosine = cosine
         
 
 class Experiment:
@@ -83,10 +73,11 @@ class Experiment:
             lr=self.training_config.lr,
             weight_decay=self.training_config.weight_decay,
         )
-        self.scheduler = get_linear_warmup_flat_schedule(
+        scheduler_function = get_linear_schedule_with_warmup if (not self.training_config.cosine) else get_cosine_schedule_with_warmup
+        self.scheduler = scheduler_function(
             self.optimizer,
-            total_steps=self.training_config.num_train_steps * self.training_config.num_train_epochs,
-            warmup_percentage=self.training_config.warmup_percentage,
+            num_warmup_steps=int(self.training_config.num_train_steps * self.training_config.num_train_epochs * self.training_config.warmup_percentage),
+            num_training_steps=self.training_config.num_train_steps * self.training_config.num_train_epochs,
         )
 
         # set up log dir
