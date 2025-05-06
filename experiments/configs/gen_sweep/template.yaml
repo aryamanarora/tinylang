@@ -4,7 +4,7 @@ evaluators:
     run_every_n_steps: 200
 - class: InterchangeEvaluator
   config:
-    run_every_n_steps: 400
+    run_every_n_steps: 1000
 language:
   class: PCFG
   config:

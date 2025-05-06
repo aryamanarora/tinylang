@@ -58,7 +58,7 @@ for mixer_type in ablations["mixer_type"]:
                 factor = flops_unit / total_flops
                 new_config["training"]["num_train_steps"] = int(new_config["training"]["num_train_steps"] * factor)
                 # save config
-                name = f"{mixer_type}_{n_embd}_{lr:.0e}_{tts_temp}"
+                name = f"{mixer_type}_{n_embd}_{lr:.0e}_{int(100 * tts_temp)}"
                 print(name, total_flops, new_config["training"]["num_train_steps"])
                 with open(f"./{name}.yaml", "w") as f:
                     yaml.dump(new_config, f)
