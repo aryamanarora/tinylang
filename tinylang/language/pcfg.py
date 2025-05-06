@@ -139,12 +139,12 @@ class PCFG(Language):
         self.start_probs = np.ones(num_nonterminals) / num_nonterminals
     
 
-    def prepare_sets(self, train_batch_size: int, eval_batch_size: int, num_train_steps: int, num_eval_steps: int):
+    def prepare_sets(self, train_set_size: int, eval_set_size: int):
         """Prepare the train and eval sets."""
         # train set?
         if self.prepare_train_set:
             self.train_set = defaultdict(list)
-            for _ in tqdm(range(num_train_steps * train_batch_size), desc="Preparing train set"):
+            for _ in tqdm(range(train_set_size), desc="Preparing train set"):
                 tok, probing_schema = self.sample(split="train", return_stats=False)
                 self.train_set["toks"].append(tok)
                 self.train_set["probing_schemas"].append(probing_schema)
@@ -159,7 +159,7 @@ class PCFG(Language):
         for split in self.evalsets.keys():
             self.evalsets[split]["toks"], self.evalsets[split]["probing_schemas"] = [], []
             self.stats[split] = defaultdict(list)
-            for _ in range(num_eval_steps * eval_batch_size):
+            for _ in range(eval_set_size):
                 tok, probing_schema, stats = self.sample(split=split, return_stats=True)
                 self.evalsets[split]["toks"].append(tok)
                 self.evalsets[split]["probing_schemas"].append(probing_schema)

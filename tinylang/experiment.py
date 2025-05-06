@@ -5,11 +5,10 @@ import torch
 from tqdm import tqdm
 from collections import defaultdict
 import os
-import pandas as pd
-import plotnine as p9
 import numpy as np
 import random
 import wandb
+import pickle
 
 # fix all seeds
 torch.manual_seed(42)
@@ -35,6 +34,7 @@ class TrainingConfig:
         wandb: bool = False,
         weight_decay: float = 0.0,
         warmup_percentage: float = 0.0,
+        num_train_epochs: int = 1,
     ):
         self.train_batch_size = train_batch_size
         self.eval_batch_size = eval_batch_size
@@ -47,6 +47,7 @@ class TrainingConfig:
         self.wandb = wandb
         self.weight_decay = weight_decay
         self.warmup_percentage = warmup_percentage
+        self.num_train_epochs = num_train_epochs
 
 
 def get_linear_warmup_flat_schedule(optimizer, total_steps, warmup_percentage):
@@ -84,7 +85,7 @@ class Experiment:
         )
         self.scheduler = get_linear_warmup_flat_schedule(
             self.optimizer,
-            total_steps=self.training_config.num_train_steps,
+            total_steps=self.training_config.num_train_steps * self.training_config.num_train_epochs,
             warmup_percentage=self.training_config.warmup_percentage,
         )
 
@@ -118,7 +119,10 @@ class Experiment:
         """Load an experiment from a config file."""
 
         # set up language
-        language = Language.from_config(config["language"])
+        if config["language"].get("file", None) is not None:
+            language = Language.load(config["language"]["file"])
+        else:
+            language = Language.from_config(config["language"])
         config["model"]["config"]["vocab_size"] = language.vocab_size
 
         # set up device
@@ -130,12 +134,11 @@ class Experiment:
         training_config = TrainingConfig(**config["training"])
 
         # prepare train/eval sets
-        language.prepare_sets(
-            train_batch_size=training_config.train_batch_size,
-            eval_batch_size=training_config.eval_batch_size,
-            num_train_steps=training_config.num_train_steps,
-            num_eval_steps=training_config.num_eval_steps,
-        )
+        if config["language"].get("file", None) is None:
+            language.prepare_sets(
+                train_set_size=training_config.train_batch_size * training_config.num_train_steps,
+                eval_set_size=training_config.eval_batch_size * training_config.num_eval_steps,
+            )
 
         # evals
         evaluators = {}
@@ -148,7 +151,7 @@ class Experiment:
 
     def train(self):
         """Main training loop."""
-        iterator = tqdm(range(self.training_config.num_train_steps + 1), desc="Training") if self.verbose else range(self.training_config.num_train_steps + 1)
+        iterator = tqdm(range(self.training_config.num_train_epochs * self.training_config.num_train_steps + 1), desc="Training") if self.verbose else range(self.training_config.num_train_epochs * self.training_config.num_train_steps + 1)
         for step in iterator:
             # print current cuda memory usage
             # print(torch.cuda.memory_stats(device=self.model.model.device)["allocated_bytes.all.peak"])
@@ -160,8 +163,8 @@ class Experiment:
             eval_stats["step"] = step
 
             # one train step
-            if step != self.training_config.num_train_steps:
-                train_loss = self.train_step(step)
+            if step != self.training_config.num_train_steps * self.training_config.num_train_epochs:
+                train_loss = self.train_step(step % self.training_config.num_train_steps)
                 eval_stats["train/loss"] = train_loss
                 eval_stats["train/lr"] = self.scheduler.get_last_lr()[0]
                 if self.verbose:
@@ -251,6 +254,7 @@ class Experiment:
             param.requires_grad = True
         self.model.model.train()
         return results
+
 
     def make_plots(self):
         """Make plots of the evaluation stats."""
