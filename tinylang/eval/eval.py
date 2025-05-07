@@ -63,6 +63,8 @@ class Evaluator(ABC):
     def plot(self, log_dir: str):
         """Default plot method for all evaluators."""
         assert self.df is not None, "Please call prepare_plot() first"
+        # aggregate the data
+        self.df = self.df.groupby(["step", "variable"]).mean().reset_index()
         df = self.df
         for col in df["variable"].unique():
             # make sure type is numeric
