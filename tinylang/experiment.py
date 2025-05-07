@@ -36,6 +36,7 @@ class TrainingConfig:
         warmup_percentage: float = 0.0,
         num_train_epochs: int = 1,
         cosine: bool = False,
+        language_from_file: bool = False,
     ):
         self.train_batch_size = train_batch_size
         self.eval_batch_size = eval_batch_size
@@ -50,7 +51,8 @@ class TrainingConfig:
         self.warmup_percentage = warmup_percentage
         self.num_train_epochs = num_train_epochs
         self.cosine = cosine
-        
+        self.language_from_file = language_from_file
+
 
 class Experiment:
     def __init__(
@@ -110,7 +112,8 @@ class Experiment:
         """Load an experiment from a config file."""
 
         # set up language
-        if config["language"].get("file", None) is not None:
+        language_from_file = config["language"].get("file", None) is not None
+        if language_from_file:
             language = Language.load(config["language"]["file"])
         else:
             language = Language.from_config(config["language"])
@@ -123,6 +126,7 @@ class Experiment:
         # load configs
         model = Model.from_config(config["model"])
         training_config = TrainingConfig(**config["training"])
+        training_config.language_from_file = language_from_file
 
         # prepare train/eval sets
         if config["language"].get("file", None) is None:
@@ -174,7 +178,8 @@ class Experiment:
 
         # save model and language to log dir for reproducibility
         self.model.save(os.path.join(self.training_config.log_dir, "model.pt"))
-        self.language.save(os.path.join(self.training_config.log_dir, "language.pkl"))
+        if not self.language_from_file: # if language was not loaded from file, save it
+            self.language.save(os.path.join(self.training_config.log_dir, "language.pkl"))
     
 
     def train_step(self, step: int):
