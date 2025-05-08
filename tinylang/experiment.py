@@ -178,7 +178,7 @@ class Experiment:
 
         # save model and language to log dir for reproducibility
         self.model.save(os.path.join(self.training_config.log_dir, "model.pt"))
-        if not self.language_from_file: # if language was not loaded from file, save it
+        if not self.training_config.language_from_file: # if language was not loaded from file, save it
             self.language.save(os.path.join(self.training_config.log_dir, "language.pkl"))
     
 

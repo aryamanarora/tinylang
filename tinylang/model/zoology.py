@@ -20,6 +20,7 @@ class Zoology(Model):
         state_mixer_type: str | None = None,
         device: torch.device | None = None,
         bias: bool = False,
+        pos_emb: bool = True,
     ):
         n_inner = 4 * n_embd if n_inner is None else n_inner
         self.n_layer = n_layer
@@ -124,7 +125,7 @@ class Zoology(Model):
             state_mixer=state_mixer,
             d_model=n_embd,
             n_layers=n_layer,
-            max_position_embeddings=n_positions,
+            max_position_embeddings=n_positions if pos_emb else 0,
             learnable_word_embeddings=True,
             vocab_size=vocab_size,
             resid_dropout=0.0,
