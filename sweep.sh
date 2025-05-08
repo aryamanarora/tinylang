@@ -4,13 +4,15 @@
 # folder should be required as an argument
 
 FOLDER=$1
+FILE_PREFIX=${2:-}
 
-for file in $FOLDER/*.yaml; do
+for file in $FOLDER/$FILE_PREFIX*.yaml; do
     filename=$(basename "$file" .yaml)
     # skip if filename is template.yaml
     if [[ "$filename" == "template" ]]; then
         continue
     fi
+    # echo "Running $file"
     nlprun -q jag -g 1 -a boundless -n "$filename" "uv run tinylang '$file' --wandb"
 done
 
