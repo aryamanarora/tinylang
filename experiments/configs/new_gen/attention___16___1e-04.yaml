@@ -7,7 +7,7 @@ evaluators:
     run_every_n_steps: 1000
 language:
   class: PCFG
-  file: /nlp/scr/neilrathi/languages/pcfg_tts.pkl
+  file: ../../../../nlp/scr/neilrathi/languages/pcfg_tts.pkl
 model:
   class: Zoology
   config:
