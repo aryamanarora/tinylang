@@ -30,6 +30,7 @@ class PCFG(Language):
         max_depth: int,
         head_position: str="left",
         mask_nonquery: bool=False,
+        no_parent_queries: bool=False,
         no_sibling_queries: bool=False,
         no_child_queries: bool=False,
         max_length: int=1024,
@@ -71,9 +72,12 @@ class PCFG(Language):
         self.max_length = max_length
 
         # which queries are disabled?
+        self.no_parent_queries = no_parent_queries
         self.no_sibling_queries = no_sibling_queries
         self.no_child_queries = no_child_queries
-        self.acceptable_query_types = [QueryType.PARENT]
+        self.acceptable_query_types = []
+        if not self.no_parent_queries:
+            self.acceptable_query_types.append(QueryType.PARENT)
         if not self.no_child_queries:
             self.acceptable_query_types.append(QueryType.CHILD)
         if not self.no_sibling_queries:
@@ -332,11 +336,16 @@ class PCFG(Language):
                 rightmost_types[node.label] = max(rightmost_types.get(node.label, 0), i)
             
             # query must be the rightmost instance of its type
-            # TODO: still ambiguous for sibling queries!
             for query_type in self.acceptable_query_types:
-                eligible_pairs[query_type] = [
-                    (query, target) for query, target in eligible_pairs[query_type] if rightmost_types[sentence[query].label] == query
-                ]
+                if query_type == QueryType.SIBLING:
+                    # for sibling queries, both query and target must be rightmost instances
+                    eligible_pairs[query_type] = [
+                        (query, target) for query, target in eligible_pairs[query_type] if rightmost_types[sentence[query].label] == query and rightmost_types[sentence[target].label] == target
+                    ]
+                else:
+                    eligible_pairs[query_type] = [
+                        (query, target) for query, target in eligible_pairs[query_type] if rightmost_types[sentence[query].label] == query
+                    ]
         
         # now we have a list of eligible (query, target) pairs for each query type
         # let's also pass the eligible queries/targets for sampling

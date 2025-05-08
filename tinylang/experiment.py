@@ -90,7 +90,7 @@ class Experiment:
         print(f"Model size: {size}")
 
         # log to wandb
-        name = self.training_config.log_dir.split("/logs/")[-1].replace("//", "/").replace("//", "/")
+        name = self.training_config.log_dir.split("logs/")[-1].replace("//", "/").replace("//", "/")
         name = name.replace(".", "_")
         training_dict = self.training_config.__dict__
         if self.wandb:
