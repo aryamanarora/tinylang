@@ -312,9 +312,10 @@ class PCFG(Language):
                     if len(self.prohibited_pairs) > 0:
                         if split in ["train", "dev"]:
                             if (sentence[target].label, sentence[query].label) in self.prohibited_pairs:
+                                continue
                                 # some pairs are 'rare'
-                                if np.random.uniform() > self.tts_temp:
-                                    continue
+                                # if np.random.uniform() > self.tts_temp:
+                                #     continue
                         elif split == "test":
                             if (sentence[target].label, sentence[query].label) not in self.prohibited_pairs:
                                 continue
