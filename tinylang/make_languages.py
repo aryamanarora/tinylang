@@ -44,6 +44,37 @@ def pcfg_vary_max_rhs_len():
                 print(f"{k:>40}: {np.mean(v):.5f}, {np.min(v):.5f}, {np.max(v):.5f}")
         language.save(f"../languages/pcfg_{name}.pkl")
 
+def pcfg_with_tts():
+    # this is the easy config
+    config = {
+        "class": "PCFG",
+        "config": {
+            "head_position": "right",
+            "mask_nonquery": True,
+            "max_depth": 10,
+            "max_rhs_len": 5,
+            "max_rules_per_nt": 5,
+            "no_child_queries": True,
+            "no_sibling_queries": True,
+            "num_nonterminals": 40,
+            "num_terminals": 20,
+            "train_test_split": 0.2,
+            "transparent_nonterminals": False,
+            "unambiguous_queries": True,
+            "prepare_train_set": True,
+        },
+    }
+
+    language = Language.from_config(config)
+    language.prepare_sets(
+        train_set_size=100032,
+        eval_set_size=1024,
+    )
+    for k, v in language.stats["test"].items():
+        if isinstance(v, list):
+            print(f"{k:>40}: {np.mean(v):.5f}, {np.min(v):.5f}, {np.max(v):.5f}")
+    language.save(f"../languages/pcfg_tts.pkl")
+
 
 def ar_vary_num_kv():
     config = {
@@ -77,6 +108,7 @@ def ar_vary_num_kv():
 # mapping
 CONFIG_MAPPING = {
     "pcfg_vary_max_rhs_len": pcfg_vary_max_rhs_len,
+    "pcfg_tts": pcfg_with_tts,
     "ar_vary_num_kv": ar_vary_num_kv,
 }
 
