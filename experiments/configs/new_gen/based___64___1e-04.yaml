@@ -16,7 +16,8 @@ model:
     n_embd: 64
     n_head: 1
     n_layer: 2
-    n_positions: 0
+    n_positions: 1024
+    pos_emb: false
     state_mixer_type: mlp
 training:
   eval_batch_size: 64

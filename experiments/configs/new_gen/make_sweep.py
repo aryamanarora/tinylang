@@ -19,7 +19,7 @@ for mixer_type in ablations["mixer_type"]:
             new_config["model"]["config"]["mixer_type"] = mixer_type
             new_config["model"]["config"]["n_embd"] = n_embd
             if mixer_type != "attention":
-                new_config["model"]["config"]["n_positions"] = 0
+                new_config["model"]["config"]["pos_emb"] = False
             if mixer_type == "mamba":
                 new_config["model"]["config"]["state_mixer_type"] = None
             new_config["training"]["lr"] = lr
