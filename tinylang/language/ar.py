@@ -2,6 +2,8 @@ from .language import Language
 import random
 import numpy as np
 import torch
+from collections import defaultdict
+from tqdm import tqdm
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -15,6 +17,8 @@ class AR(Language):
         min_length: int=2,
         query_type: str="key",
         mask_nonquery: bool=False,
+        prepare_train_set: bool=False,
+        train_test_split: float=0.0,
     ):
         super().__init__()
         assert num_kv % 2 == 0
@@ -29,8 +33,11 @@ class AR(Language):
         self.BOS = 1
         self.EOS = 2
         self.KEY_START = 3
+        self.VALUE_START = 3 + num_kv // 2
         self.keys = [f"k{i}" for i in range(num_kv // 2)]
         self.values = [f"v{i}" for i in range(num_kv // 2)]
+        self.num_keys = num_kv // 2
+        self.num_values = num_kv // 2
         self.id_to_token = {
             self.PAD: "<pad>",
             self.BOS: "<bos>",
@@ -43,37 +50,42 @@ class AR(Language):
         self.vocab_size = len(self.id_to_token)
         self.TERMINAL_START = self.KEY_START if self.query_type == "key" else self.KEY_START + num_kv // 2
         self.QUERY_START = self.TERMINAL_START + num_kv // 2
-    
+        self.prepare_train_set = prepare_train_set
 
-    def prepare_sets(self, train_batch_size: int, eval_batch_size: int, num_train_steps: int, num_eval_steps: int):
-        """Prepare the train and eval sets."""
-        # we ignore train steps since we are generating on the fly
-        self.evalsets = {"test": {
-            "toks": [],
-            "probing_schemas": [],
-        }}
-        for _ in range(num_eval_steps * eval_batch_size):
-            tok, probing_schema = self.sample(split="test")
-            self.evalsets["test"]["toks"].append(tok)
-            self.evalsets["test"]["probing_schemas"].append(probing_schema)
+        # are any pairs prohibited in the train set?
+        if train_test_split > 0.0:
+            self.blacklist_matrix = np.random.rand(self.num_keys, self.num_values)
+            # set train_test_split % of matrix to 1
+            self.blacklist_matrix = (self.blacklist_matrix < train_test_split).astype(int)
+            self.prohibited_pairs = set([(i, j) for i in range(self.num_keys) for j in range(self.num_values) if self.blacklist_matrix[i, j] == 1])
+        else:
+            self.prohibited_pairs = set()
+
     
-    def sample(self, split: str="test"):
+    def sample(self, split: str="test", return_stats: bool=False):
         """Generate a random sentence from the AR."""
         num_sample = random.randint(self.min_length // 2, self.max_length // 2)
-        keys = list(range(self.num_kv // 2))
-        values = list(range(self.num_kv // 2, self.num_kv))
-        random.shuffle(keys)
-        random.shuffle(values)
-
+        keys = np.random.choice(self.num_keys, size=num_sample, replace=False)
+        values = np.random.choice(self.num_values, size=num_sample, replace=False)
+        
         # construct KV pairs
         sentence = [self.BOS]
         for i in range(num_sample):
             sentence.append(keys[i] + self.KEY_START)
-            sentence.append(values[i] + self.KEY_START)
+            sentence.append(values[i] + self.VALUE_START)
         sentence.append(self.EOS)
 
+        # get eligible pairs
+        if self.prohibited_pairs is not None:
+            eligible_pairs = []
+            for i in range(num_sample):
+                if (keys[i], values[i]) not in self.prohibited_pairs:
+                    eligible_pairs.append(i)
+            q_pos = random.choice(eligible_pairs)
+        else:
+            q_pos = np.random.randint(0, num_sample)
+
         # set up query
-        q_pos = random.randint(0, num_sample - 1)
         if self.query_type == "key":
             query = keys[q_pos]
             answer = values[q_pos]
@@ -82,16 +94,12 @@ class AR(Language):
             query = values[q_pos]
             answer = keys[q_pos]
             q, a = q_pos * 2 + 1, q_pos * 2
+
+        # add query and answer to sentence
         query += self.KEY_START
-        answer += self.KEY_START
+        answer += self.VALUE_START
         sentence.extend([query, answer])
         sentence = sentence + [self.EOS]
-        # print(self.prettify(sentence))
-        # input()
-
-        # get the target distribution
-        target_distribution = np.zeros(self.vocab_size)
-        target_distribution[answer] += 1
 
         # make probing schema
         probing_schema = {
@@ -115,7 +123,7 @@ class AR(Language):
                 },
                 "query_item": {
                     "pos": len(sentence) - 3,
-                    "target_distribution": torch.tensor(target_distribution),
+                    "target_distribution": True,
                 },
                 "target_item": {
                     "pos": len(sentence) - 2,
@@ -132,6 +140,16 @@ class AR(Language):
             }
         }
 
+        if return_stats:
+            stats = {
+                "doc_length": len(sentence),
+                "num_pairs": num_sample,
+                "query_orig_target_orig_dist": np.abs(probing_schema["queries"]["query_item_orig"]["pos"] - probing_schema["queries"]["target_item_orig"]["pos"]),
+                "query_query_orig_dist": np.abs(probing_schema["queries"]["query_item_orig"]["pos"] - probing_schema["queries"]["query_item"]["pos"]),
+                "query_target_orig_dist": np.abs(probing_schema["queries"]["target_item_orig"]["pos"] - probing_schema["queries"]["query_item"]["pos"]),
+                "eligible_pairs": len(eligible_pairs),
+            }
+            return sentence, probing_schema, stats
         return sentence, probing_schema
     
     def prettify(self, toks: list[int]) -> str:
@@ -160,23 +178,3 @@ class AR(Language):
             "probing_schemas": probing_schemas,
         }
         return ret
-
-    
-    def get_train_step(self, step: int, batch_size: int, verbose: bool = False) -> dict:
-        toks, probing_schemas = [], []
-        for _ in range(batch_size):
-            tok, probing_schema = self.sample(split="train")
-            toks.append(tok)
-            probing_schemas.append(probing_schema)
-
-        return self.batchify(toks, probing_schemas, verbose=verbose)
-
-
-    def get_eval_step(self, step: int, batch_size: int, split: str="test") -> dict:
-        """Get an eval step."""
-        batch_start, batch_end = step * batch_size, min(len(self.evalsets[split]["toks"]), (step + 1) * batch_size)
-        return self.batchify(
-            self.evalsets[split]["toks"][batch_start:batch_end],
-            self.evalsets[split]["probing_schemas"][batch_start:batch_end],
-            verbose=True,
-        )

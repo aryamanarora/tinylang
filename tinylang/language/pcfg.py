@@ -431,7 +431,7 @@ class PCFG(Language):
                 },
                 "query_type": {
                     "pos": len(tokens) - 1 - len(query) + 1,
-                    "target_distribution": torch.tensor(target_distribution),
+                    "target_distribution": None if len(self.acceptable_query_types) == 1 else torch.tensor(target_distribution),
                 },
                 "target_item": {
                     "pos": len(tokens) - 1 - len(query) + (2 if len(self.acceptable_query_types) != 1 else 1),
@@ -492,8 +492,7 @@ class PCFG(Language):
 
         if self.mask_nonquery:
             for i in range(len(tokens)):
-                length = len(tokens[i])
-                target_token = length - 2
+                target_token = probing_schemas[i]["queries"]["target_item"]["pos"]
                 # mask all except query token
                 labels[i, :target_token] = -100
                 labels[i, target_token + 1:] = -100
