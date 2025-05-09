@@ -186,11 +186,11 @@ class InterchangeEvaluator(Evaluator):
                     self.all_eval_stats[step][f"{label}.max_perc_layer"].append(layer_counts[layer] / len(maxes_layer[subset]))
                 
     def post_eval(self, step: int):
-        for ending in ["kl_div", "restored_prob", "restored_logit", "prob_diff", "logit_diff"]:
-            top = [(np.mean(v), k) for k, v in self.all_eval_stats[step].items() if k.endswith(ending)]
-            for v, k in sorted(top):
-                print(f"{k:>80}: {v:.5f}")
-            print('------')
+        # for ending in ["kl_div", "restored_prob", "restored_logit", "prob_diff", "logit_diff"]:
+        #     top = [(np.mean(v), k) for k, v in self.all_eval_stats[step].items() if k.endswith(ending)]
+        #     for v, k in sorted(top):
+        #         print(f"{k:>80}: {v:.5f}")
+        #     print('------')
         
         # memoisation score
         all_keys = list(self.all_eval_stats[step].keys())
@@ -202,7 +202,7 @@ class InterchangeEvaluator(Evaluator):
                     memo_keys.add(f"{memo_key}.memo_score")
         for key in memo_keys:
             self.all_eval_stats[step][key] = max(self.all_eval_stats[step][key])
-            print(f"{key}: {self.all_eval_stats[step][key]:.5f}")
+            # print(f"{key}: {self.all_eval_stats[step][key]:.5f}")
 
 
     def plot(self, log_dir: str):
