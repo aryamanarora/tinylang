@@ -40,6 +40,7 @@ class PCFG(Language):
         unambiguous_queries: bool=False,
         sample_first: str="target",
         prepare_train_set: bool=False,
+        terminal_occurrence_factor: float | None=None, # how much to count all the terminals as
     ):
         super().__init__()
         self.PAD = 0
@@ -96,6 +97,11 @@ class PCFG(Language):
             self.prohibited_pairs = set()
         
         self.tts_temp = tts_temp
+
+        # how much do terminals count as?
+        # by default, they count as num_terminals. but if specified,
+        # this sets the weightage of terminals in production RHS
+        self.terminal_occurrence_factor = terminal_occurrence_factor
         
         # make the terminals and nonterminals
         self.terminals = [f"t{i}" for i in range(num_terminals)]
@@ -112,10 +118,24 @@ class PCFG(Language):
             num_rules = np.random.randint(1, max_rules_per_nt + 1)
             # select acceptable nonterminals
             nonterminals_subset = [x for x in self.nonterminals if self.max_depths[x] > self.max_depths[nt]] if max_depth > 0 else self.nonterminals
-            for _ in range(num_rules):
-                lhs = nt
-                rhs = np.random.choice(nonterminals_subset + self.terminals, size=np.random.randint(1, max_rhs_len), replace=True)
-                self.rules[lhs].append(rhs)
+            if self.terminal_occurrence_factor is not None:
+                weightage = np.ones(len(nonterminals_subset) + 1) # the last one is for terminals
+                weightage[-1] = self.terminal_occurrence_factor
+                weightage = weightage / np.sum(weightage)
+                for _ in range(num_rules):
+                    lhs = nt
+                    rhs = np.random.choice(nonterminals_subset + ['TERMINAL'], size=np.random.randint(1, max_rhs_len), replace=True, p=weightage)
+                    self.rules[lhs].append(rhs)
+            else:
+                for _ in range(num_rules):
+                    lhs = nt
+                    rhs = np.random.choice(nonterminals_subset + self.terminals, size=np.random.randint(1, max_rhs_len), replace=True)
+                    self.rules[lhs].append(rhs)
+        
+        # fix rhs afterwards to not interfere with seed effect on tree structure
+        for nt in self.nonterminals:
+            for i, rule in enumerate(self.rules[nt]):
+                self.rules[nt][i] = [x if x != 'TERMINAL' else np.random.choice(self.terminals) for x in rule]
         
         # for each nt, set the probability of its rules
         self.rule_probs = {}
@@ -401,15 +421,20 @@ class PCFG(Language):
         target_item = sentence[target_item].label + self.TERMINAL_START
 
         # get the target distribution
-        target_distribution = np.zeros(self.vocab_size)
+        target_distribution = True
+        if self.vocab_size < 100:
+            target_distribution = np.zeros(self.vocab_size)
         all_target_pos = []
         for item in range(len(sentence)):
             if (query_item, item) not in eligible_pairs[query_type]:
                 continue
-            tok = sentence[item].label + self.TERMINAL_START
-            target_distribution[tok] += 1
+            if self.vocab_size < 100:
+                tok = sentence[item].label + self.TERMINAL_START
+                target_distribution[tok] += 1
             all_target_pos.append(1 + item)
-        target_distribution = target_distribution / np.sum(target_distribution)
+        if self.vocab_size < 100:
+            target_distribution = target_distribution / np.sum(target_distribution)
+            target_distribution = torch.tensor(target_distribution)
 
         # get query item token
         query_item = sentence[query_item].label + self.TERMINAL_START
@@ -437,11 +462,11 @@ class PCFG(Language):
             "queries": {
                 "query_item": {
                     "pos": len(tokens) - 1 - len(query),
-                    "target_distribution": None if len(self.acceptable_query_types) != 1 else torch.tensor(target_distribution),
+                    "target_distribution": None if len(self.acceptable_query_types) != 1 else target_distribution,
                 },
                 "query_type": {
                     "pos": len(tokens) - 1 - len(query) + 1,
-                    "target_distribution": None if len(self.acceptable_query_types) == 1 else torch.tensor(target_distribution),
+                    "target_distribution": None if len(self.acceptable_query_types) == 1 else target_distribution,
                 },
                 "target_item": {
                     "pos": len(tokens) - 1 - len(query) + (2 if len(self.acceptable_query_types) != 1 else 1),

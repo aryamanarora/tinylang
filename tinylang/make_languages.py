@@ -7,22 +7,23 @@ import argparse
 import yaml
 import glob
 
-# fix all seeds
-torch.manual_seed(42)
-np.random.seed(42)
-random.seed(42)
-
 def load_config(config_path):
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
 
 def generate_language(config_path, output_name):
+    # fix all seeds
+    torch.manual_seed(42)
+    np.random.seed(42)
+    random.seed(42)
+
     config = load_config(config_path)
     language = Language.from_config(config)
     language.prepare_sets(
         train_set_size=100032,
         eval_set_size=1024,
     )
+    print(output_name)
     for k, v in language.stats["test"].items():
         if isinstance(v, list):
             print(f"{k:>40}: {np.mean(v):.5f}, {np.min(v):.5f}, {np.max(v):.5f}")

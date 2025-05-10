@@ -9,7 +9,6 @@ import numpy as np
 import random
 import wandb
 from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
-import shutil
 
 # fix all seeds
 torch.manual_seed(42)
@@ -85,10 +84,6 @@ class Experiment:
 
         # set up log dir
         os.makedirs(self.training_config.log_dir, exist_ok=True)
-
-        # delete wandb directory
-        if os.path.exists("wandb"):
-            shutil.rmtree("wandb")
 
         # print model size
         size = sum(p.numel() for p in self.model.model.parameters())
