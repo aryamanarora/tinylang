@@ -323,7 +323,11 @@ class PCFG(Language):
 
     def get_eligible_pairs(self, sentence: list[Node], split: str="train") -> tuple[dict, dict, dict]:
         """Get the eligible (query, target) pairs for the sentence based on our constraints."""
+
         eligible_pairs = {}
+        
+        # default rightmost sibling is self
+        rightmost_siblings = {q : q for q in range(len(sentence))}
 
         # we will construct a list of eligible (query, target) pairs for each query type
         for query_type in self.acceptable_query_types:
@@ -337,17 +341,22 @@ class PCFG(Language):
                         if split in ["train", "dev"]:
                             if (sentence[target].label, sentence[query].label) in self.prohibited_pairs:
                                 continue
-                                # some pairs are 'rare'
-                                # if np.random.uniform() > self.tts_temp:
-                                #     continue
                         elif split == "test":
                             if (sentence[target].label, sentence[query].label) not in self.prohibited_pairs:
                                 continue
                     
                     # second check if it satisfies the relation
                     if self.is_relation(sentence, query_type, query, target):
-                        eligible_pairs[query_type].append((query, target))
-            
+                                                
+                        if query_type == QueryType.SIBLING:
+                            rightmost_siblings[query] = max(rightmost_siblings[query], target)
+                        else:
+                            eligible_pairs[query_type].append((query, target))
+
+        if QueryType.SIBLING in self.acceptable_query_types:
+            for query in rightmost_siblings:
+                eligible_pairs[QueryType.SIBLING].append((query, rightmost_siblings[query]))
+
         # now filter for rightmost instance of each child, for the queries
         if self.unambiguous_queries:
             # get rightmost instance of each terminal
