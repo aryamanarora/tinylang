@@ -60,6 +60,14 @@ class Zoology(Model):
                     "bias": bias,
                 }
             ),
+            "base_conv_long_only": dict(
+                name="zoology.mixers.base_conv.BaseConv",
+                kwargs={
+                    "l_max": input_seq_len,
+                    "kernel_size": -1,
+                    "bias": bias,
+                }
+            ),
             "h3": dict(
                 name="zoology.mixers.h3.H3",
                 kwargs={
@@ -79,6 +87,35 @@ class Zoology(Model):
                                 "l_max": input_seq_len,
                                 # pass a list of kernel sizes for each of four layers
                                 "kernel_size": 3,
+                                "implicit_long_conv": True,
+                                "bias": bias,
+                            }
+                        ),
+                        dict(
+                            name="zoology.mixers.based.Based",
+                            kwargs={
+                                "l_max": input_seq_len,
+                                "feature_dim": 8,
+                                "num_key_value_heads": n_head,
+                                "num_heads": n_head,
+                                "feature_name": "taylor_exp",
+                                "train_view": "quadratic",
+                                "bias": bias,
+                            }
+                        )
+                    ]
+                }
+            ),
+            "based_long_only": dict(
+                name="zoology.mixers.hybrid.Hybrid",
+                kwargs={
+                    "configs": [
+                        dict(
+                            name="zoology.mixers.base_conv.BaseConv",
+                            kwargs={
+                                "l_max": input_seq_len,
+                                # pass a list of kernel sizes for each of four layers
+                                "kernel_size": -1,
                                 "implicit_long_conv": True,
                                 "bias": bias,
                             }
