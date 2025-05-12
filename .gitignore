@@ -21,3 +21,4 @@ wandb/
 experiments/logs*/*
 subspace/logs/*
 languages/
+notebooks/Sweep.ipynb
