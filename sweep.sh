@@ -5,6 +5,7 @@
 
 FOLDER=$1
 FILE_PREFIX=${2:-}
+DONT_EXECUTE=${3:-false}
 
 for file in $FOLDER/$FILE_PREFIX*.yaml; do
     filename=$(basename "$file" .yaml)
@@ -12,29 +13,19 @@ for file in $FOLDER/$FILE_PREFIX*.yaml; do
     if [[ "$filename" == "template" ]]; then
         continue
     fi
-    # echo "Running $file"
-    nlprun -q jag -g 1 -a boundless -n "$filename" "uv run tinylang '$file' --wandb"
+    
+    # get config path after configs/
+    config_path=$(echo "$file" | sed 's/.*configs\///' | sed 's/\.yaml$//')
+    log_dir="experiments/logs/$config_path"
+    
+    # skip if test/SummaryEvaluator.csv already exists
+    if [[ -f "$log_dir/test/SummaryEvaluator.csv" ]]; then
+        echo "Skipping $file - already has test/SummaryEvaluator.csv"
+        continue
+    fi
+    
+    echo "Running $file"
+    if [[ "$DONT_EXECUTE" == "false" ]]; then
+        nlprun -q jag -g 1 -a boundless -n "$filename" "uv run tinylang '$file' --wandb"
+    fi
 done
-
-# nlprun -q jag -g 1 -a boundless -n 4_4_128_llama 'uv run tinylang experiments/configs/pcfg_4_4_128_llama.yaml'
-# nlprun -q jag -g 1 -a boundless -n 4_4_64_llama 'uv run tinylang experiments/configs/pcfg_4_4_64_llama.yaml'
-# nlprun -q jag -g 1 -a boundless -n 4_4_32_llama 'uv run tinylang experiments/configs/pcfg_4_4_32_llama.yaml'
-# nlprun -q jag -g 1 -a boundless -n 4_4_16_llama 'uv run tinylang experiments/configs/pcfg_4_4_16_llama.yaml'
-
-# nlprun -q jag -g 1 -a boundless -n 3_2_256_right 'uv run tinylang experiments/configs/pcfg_3_2_256_right.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_128_right 'uv run tinylang experiments/configs/pcfg_3_2_128_right.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_64_right 'uv run tinylang experiments/configs/pcfg_3_2_64_right.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_16_right 'uv run tinylang experiments/configs/pcfg_3_2_16_right.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_4_right 'uv run tinylang experiments/configs/pcfg_3_2_4_right.yaml'
-
-# nlprun -q jag -g 1 -a boundless -n 3_2_256 'uv run tinylang experiments/configs/pcfg_3_2_256.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_128 'uv run tinylang experiments/configs/pcfg_3_2_128.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_64 'uv run tinylang experiments/configs/pcfg_3_2_64.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_16 'uv run tinylang experiments/configs/pcfg_3_2_16.yaml'
-# nlprun -q jag -g 1 -a boundless -n 3_2_4 'uv run tinylang experiments/configs/pcfg_3_2_4.yaml'
-
-# nlprun -q jag -g 1 -a boundless -n 2_2_16 'uv run tinylang experiments/configs/pcfg_2_2_16.yaml'
-# nlprun -q jag -g 1 -a boundless -n 2_2_64 'uv run tinylang experiments/configs/pcfg_2_2_64.yaml'
-# nlprun -q jag -g 1 -a boundless -n 2_2_128 'uv run tinylang experiments/configs/pcfg_2_2_128.yaml'
-# nlprun -q jag -g 1 -a boundless -n 2_2_256 'uv run tinylang experiments/configs/pcfg_2_2_256.yaml'
-

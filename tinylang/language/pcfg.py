@@ -225,9 +225,9 @@ class PCFG(Language):
         stack = [Node(str(np.random.choice(self.nonterminals, p=self.start_probs)), 0, None, 0)]
         next_id = 1
         generated = []
-        while len(stack) != 0 and len(stack) < self.max_length:
+        while len(stack) != 0:
             # check if we've reached the max length
-            if len(stack) >= self.max_length:
+            if len(generated) >= self.max_length:
                 raise RecursionError("MAX_RECURSION_DEPTH or MAX_LENGTH reached")
             
             # pop a node from the stack, we will expand it
