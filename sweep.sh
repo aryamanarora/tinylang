@@ -1,11 +1,28 @@
 #!/usr/bin/env bash
 
-# given a folder of yaml files, run the sweep
-# folder should be required as an argument
+# Default values
+FOLDER=""
+FILE_PREFIX=""
+DONT_EXECUTE="false"
+QUEUE="jag"
 
-FOLDER=$1
-FILE_PREFIX=${2:-}
-DONT_EXECUTE=${3:-false}
+# Parse named arguments
+while getopts "f:p:d:q:" opt; do
+    case $opt in
+        f) FOLDER="$OPTARG" ;;
+        p) FILE_PREFIX="$OPTARG" ;;
+        d) DONT_EXECUTE="$OPTARG" ;;
+        q) QUEUE="$OPTARG" ;;
+        \?) echo "Invalid option -$OPTARG" >&2; exit 1 ;;
+    esac
+done
+
+# Check if required argument is provided
+if [[ -z "$FOLDER" ]]; then
+    echo "Error: -f (folder) argument is required"
+    echo "Usage: $0 -f <folder> [-p <file_prefix>] [-d <dont_execute>] [-q <queue>]"
+    exit 1
+fi
 
 for file in $FOLDER/$FILE_PREFIX*.yaml; do
     filename=$(basename "$file" .yaml)
@@ -26,6 +43,6 @@ for file in $FOLDER/$FILE_PREFIX*.yaml; do
     
     echo "Running $file"
     if [[ "$DONT_EXECUTE" == "false" ]]; then
-        nlprun -q jag -g 1 -a boundless -n "$filename" "uv run tinylang '$file' --wandb"
+        nlprun -q "$QUEUE" -g 1 -a boundless -n "$filename" "uv run tinylang '$file' --wandb"
     fi
 done
