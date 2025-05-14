@@ -21,6 +21,7 @@ class Zoology(Model):
         device: torch.device | None = None,
         bias: bool = False,
         pos_emb: bool = True,
+        d_conv: int | None = None,
     ):
         n_inner = 4 * n_embd if n_inner is None else n_inner
         self.n_layer = n_layer
@@ -141,6 +142,12 @@ class Zoology(Model):
                     "bias": bias,
                 }
             ),
+            "mamba_without_conv": dict(
+                name="tinylang.model.arch.mamba.MambaWithoutConv",
+                kwargs={
+                    "bias": bias,
+                }
+            ),
             "mamba2": dict(
                 name="mamba_ssm.modules.mamba2.Mamba2",
                 kwargs={
@@ -148,6 +155,12 @@ class Zoology(Model):
                 }
             ),
         }
+
+        # set d_conv for mamba and base_conv (including inside based)
+        if d_conv is not None:
+            MIXERS["mamba"]["kwargs"]["d_conv"] = d_conv
+            MIXERS["base_conv"]["kwargs"]["kernel_size"] = d_conv
+            MIXERS["based"]["kwargs"]["configs"][0]["kwargs"]["kernel_size"] = d_conv
 
         # add MLP or GLU to model
         state_mixer = dict(name="torch.nn.Identity", kwargs={})
