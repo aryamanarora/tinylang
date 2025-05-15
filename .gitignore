@@ -20,4 +20,4 @@ wandb/
 # dont check in logs
 experiments/logs*/*
 subspace/logs/*
-languages/
+languages/*/*.pkl
