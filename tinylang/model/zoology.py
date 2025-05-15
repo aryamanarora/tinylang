@@ -148,6 +148,12 @@ class Zoology(Model):
                     "bias": bias,
                 }
             ),
+            "mamba_no_causal_conv1d": dict(
+                name="tinylang.model.arch.mamba.MambaNoCausalConv1D",
+                kwargs={
+                    "bias": bias,
+                }
+            ),
             "mamba2": dict(
                 name="mamba_ssm.modules.mamba2.Mamba2",
                 kwargs={
@@ -159,6 +165,7 @@ class Zoology(Model):
         # set d_conv for mamba and base_conv (including inside based)
         if d_conv is not None:
             MIXERS["mamba"]["kwargs"]["d_conv"] = d_conv
+            MIXERS["mamba_no_causal_conv1d"]["kwargs"]["d_conv"] = d_conv
             MIXERS["base_conv"]["kwargs"]["kernel_size"] = d_conv
             MIXERS["based"]["kwargs"]["configs"][0]["kwargs"]["kernel_size"] = d_conv
 
@@ -183,7 +190,7 @@ class Zoology(Model):
             drop_path=0.0,
             layer_norm_epsilon=1e-5,
             pad_vocab_size_multiple=1,
-            block_type="TransformerBlock" if mixer_type != "mamba" else "MambaBlock",
+            block_type="MambaBlock" if mixer_type.startswith("mamba") else "TransformerBlock",
             name="default",
         )
         self.model = LanguageModel(self.config)
@@ -193,7 +200,7 @@ class Zoology(Model):
         self.model.device = device
         self.model.to(device)
         self.components = ["attention_input", "attention_output", "block_input", "block_output"]
-        if mixer_type != "mamba":
+        if not mixer_type.startswith("mamba"):
             self.components.extend(["mlp_input", "mlp_output"])
 
     

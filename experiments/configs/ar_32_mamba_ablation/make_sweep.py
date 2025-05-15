@@ -2,9 +2,10 @@ import yaml
 from copy import deepcopy
 
 ablations = {
-    "mixer_type": ["mamba_without_conv"],
+    "mixer_type": ["mamba"],
     "n_embd": [16, 32, 64, 128, 256],
     "lr": [3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
+    "d_conv": [0, 1, 2, 3],
 }
 
 with open("template.yaml", "r") as f:
@@ -12,16 +13,21 @@ with open("template.yaml", "r") as f:
 
 flops_unit = None
 
-for mixer_type in ablations["mixer_type"]:
+for d_conv in ablations["d_conv"]:
     for n_embd in ablations["n_embd"]:
         for lr in ablations["lr"]:
             new_config = deepcopy(config)
-            new_config["model"]["config"]["mixer_type"] = mixer_type
+            new_config["model"]["config"]["d_conv"] = d_conv
             new_config["model"]["config"]["n_embd"] = n_embd
-            if mixer_type == "mamba" or mixer_type == "mamba_without_conv":
-                new_config["model"]["config"]["state_mixer_type"] = None
+            new_config["model"]["config"]["state_mixer_type"] = None
             new_config["training"]["lr"] = lr
+            if 2 <= d_conv <= 4:
+                new_config["model"]["config"]["mixer_type"] = "mamba"
+            elif d_conv == 0:
+                new_config["model"]["config"]["mixer_type"] = "mamba_without_conv"
+            elif d_conv == 1:
+                new_config["model"]["config"]["mixer_type"] = "mamba_no_causal_conv1d"
             # save config
-            name = f"{mixer_type}___{n_embd}___{lr:.0e}"
+            name = f"mamba_{d_conv}___{n_embd}___{lr:.0e}"
             with open(f"./{name}.yaml", "w") as f:
                 yaml.dump(new_config, f)

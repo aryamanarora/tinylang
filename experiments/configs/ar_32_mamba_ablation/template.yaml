@@ -12,13 +12,14 @@ model:
   class: Zoology
   config:
     bias: false
-    mixer_type: attention
+    mixer_type: mamba
     n_embd: 64
     n_head: 1
     n_layer: 2
     n_positions: 1024
-    state_mixer_type: mlp
+    state_mixer_type: none
     pos_emb: false
+    d_conv: 4
 training:
   eval_batch_size: 64
   lr: 0.0003

@@ -17,13 +17,16 @@ from typing import Optional
 
 class MambaBlock(nn.Module):
     def __init__(
-        self, config, fused_add_norm=False, residual_in_fp32=True, norm_epsilon=1e-5, **factory_kwargs
+        self, config: ModelConfig, layer_idx: int, fused_add_norm=False, residual_in_fp32=True, norm_epsilon=1e-5
     ):
         super().__init__()
         d_model = config.d_model
         self.residual_in_fp32 = residual_in_fp32
         self.fused_add_norm = fused_add_norm
-        self.sequence_mixer = Mamba(d_model, **factory_kwargs, **config.sequence_mixer.kwargs)
+        self.sequence_mixer = config.sequence_mixer.instantiate(
+            d_model=config.d_model,
+            layer_idx=layer_idx,
+        )
         self.norm = RMSNorm(d_model, eps=norm_epsilon)
 
 
