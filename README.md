@@ -20,7 +20,7 @@ You may have to mess with the `zoology` package install if non-transformer archi
 
 ```
 uv remove zoology
-uv add "zoology @ https://github.com/aryamanarora/zoology.git" --no-build-isolation
+uv add "zoology @ https://github.com/HazyResearch/zoology.git" --no-build-isolation
 ```
 
 Then, to run an experiment, make a config file in the same subfolder as `experiments/configs/pcfg.yaml` using that as an example. Make sure `training.log_dir` is set to point to a path in `experiments/logs/...`. Then, run
