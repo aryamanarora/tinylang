@@ -1,18 +1,15 @@
 [project]
 name = "tinylang"
 version = "0.1.0"
-description = "Add your description here"
+description = "A framework for mechanistic evaluations of language model architectures on synthetic tasks."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "calflops>=0.3.2",
     "editables>=0.5",
-    "fvcore>=0.1.5.post20221221",
     "hatchling>=1.27.0",
     "imageio>=2.37.0",
     "ipykernel>=6.29.5",
     "matplotlib",
-    "mpltern>=1.0.4",
     "notebook>=7.3.2",
     "numpy",
     "opt-einsum>=3.4.0",
@@ -33,17 +30,15 @@ dependencies = [
     "zoology",
 ]
 
+[project.optional-dependencies]
+zoology = ["zoology", "causal-conv1d", "mamba-ssm"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["tinylang"]
-
-[tool.uv]
-default-groups = "all"
-no-build-isolation-package = ['zoology', 'causal-conv1d', 'mamba-ssm']
-package = true
 
 [tool.uv.sources]
 pyvene = { git = "https://github.com/stanfordnlp/pyvene.git" }

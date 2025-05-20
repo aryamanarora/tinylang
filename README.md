@@ -1,9 +1,12 @@
 <div align="center">
-  <h1 align="center">MechEvals <sub>by <a href="https://github.com/stanfordnlp/pyvene">pyvene</a></sub></h1>
+  <a align="center"><img src="https://github.com/user-attachments/assets/47a9d660-abb2-4d74-9a4d-da4bcfadd671" width="100" height="100" /></a>
+  <h1 align="center">Tinylang <sub>by <a href="https://github.com/stanfordnlp/pyvene">pyvene</a></sub></h1>
   <!-- <a href="..."><strong>Read our paper »</strong></a> -->
 </div>
 
-**MechEvals** is a framework for training and analysing different language model architectures on synthetic tasks. This repo includes all code for the synthetic tasks, intervention experiments (for interpretability), and some of the model architecture definitions (the remainder, for various SSMs are imported from the excellent [`zoology`](https://github.com/HazyResearch/zoology) library.)
+**Tinylang** is a framework for performing mechanistic evaluations of language model architectures on synthetic tasks. This repo includes all code for the synthetic tasks, training and logging for models, interventions for the mechanistic evaluations, and model architecture definitions.
+
+We would like to thank the creaters of the [`zoology`](https://github.com/HazyResearch/zoology) library for providing easy-to-use implementations of many SSMs used in this repo!
 
 ---
 
@@ -19,20 +22,15 @@ We generate language train/test sets in `languages/` and store config files in `
 
 ## Instructions
 
-Make sure you have `uv`. Clone/pull the repo and run the following to install the package:
+Make sure you have `uv`. Clone/pull the repo and run the following to install the package (requires GPU to build the `zoology` dependencies):
 
 ```
-uv sync
+uv sync && uv sync --extra zoology
 ```
 
-You may have to mess with the `zoology`, `causal-conv1d`, and `mamba-ssm` package installs, since the various SSM dependencies may have to be built locally. E.g. to reinstall `zoology`:
+If you are running experiments that don't depend on `zoology` architectures (i.e. all SSMs in this repo, which require `mamba-ssm` and `causal-conv1d` as dependencies), you can simply run `uv sync`. This is untested though!
 
-```
-uv remove zoology
-uv add "zoology @ https://github.com/HazyResearch/zoology.git" --no-build-isolation
-```
-
-Then, to run an experiment, make a config file in the same subfolder as `experiments/configs/pcfg.yaml` using that as an example. Make sure `training.log_dir` is set to point to a path in `experiments/logs/...`. Then, run
+To run an experiment, make a config file in the same subfolder as `experiments/configs/`. Make sure `training.log_dir` is set to point to a path in `experiments/logs/...`. Then, run
 
 ```
 uv run tinylang experiments/configs/[YOUR CONFIG FILE].yaml

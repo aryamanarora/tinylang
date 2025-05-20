@@ -306,20 +306,6 @@ css = [
 ]
 
 [[package]]
-name = "calflops"
-version = "0.3.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "accelerate" },
-    { name = "huggingface-hub" },
-    { name = "torch" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/44/d7/44c109d7586efc529e2ff1dd34268f528866f1fedde7348de40d077b20ae/calflops-0.3.2.tar.gz", hash = "sha256:3c5f79598ea4e844235d2c2fb8ec9d49edb51452f0341e2fdd6b5d521a667369", size = 1410635, upload_time = "2024-06-07T09:31:17.611Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/79/68/02c8117d39cb4b32c8d5cd537068e3b118f13596e5317218c162a53f6b79/calflops-0.3.2-py3-none-any.whl", hash = "sha256:323bc99589715f148d4e4270ae4ea7f5724f4d26c9608fae5e6749334744849b", size = 29988, upload_time = "2024-06-07T09:31:14.533Z" },
-]
-
-[[package]]
 name = "causal-conv1d"
 version = "1.5.0.post8"
 source = { registry = "https://pypi.org/simple" }
@@ -939,22 +925,6 @@ http = [
 ]
 
 [[package]]
-name = "fvcore"
-version = "0.1.5.post20221221"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "iopath" },
-    { name = "numpy" },
-    { name = "pillow" },
-    { name = "pyyaml" },
-    { name = "tabulate" },
-    { name = "termcolor" },
-    { name = "tqdm" },
-    { name = "yacs" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a5/93/d056a9c4efc6c79ba7b5159cc66bb436db93d2cc46dca18ed65c59cc8e4e/fvcore-0.1.5.post20221221.tar.gz", hash = "sha256:f2fb0bb90572ae651c11c78e20493ed19b2240550a7e4bbb2d6de87bdd037860", size = 50217, upload_time = "2022-12-21T08:10:53.563Z" }
-
-[[package]]
 name = "gitdb"
 version = "4.0.12"
 source = { registry = "https://pypi.org/simple" }
@@ -1103,17 +1073,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/f2/97/ebf4da567aa6827c9
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2c/e1/e6716421ea10d38022b952c159d5161ca1193197fb744506875fbb87ea7b/iniconfig-2.1.0-py3-none-any.whl", hash = "sha256:9deba5723312380e77435581c6bf4935c94cbfab9b1ed33ef8d238ea168eb760", size = 6050, upload_time = "2025-03-19T20:10:01.071Z" },
 ]
-
-[[package]]
-name = "iopath"
-version = "0.1.10"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "portalocker" },
-    { name = "tqdm" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/72/73/b3d451dfc523756cf177d3ebb0af76dc7751b341c60e2a21871be400ae29/iopath-0.1.10.tar.gz", hash = "sha256:3311c16a4d9137223e20f141655759933e1eda24f8bff166af834af3c645ef01", size = 42226, upload_time = "2022-07-09T19:00:50.866Z" }
 
 [[package]]
 name = "ipykernel"
@@ -1755,18 +1714,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/96/57/cb3b6f130ab629ff31e6106bbffdb9250af43e85223fdf68148d633f3bc6/mizani-0.11.4.tar.gz", hash = "sha256:9fdb79e88602ca29132613b428d6c1e8af436e88e37d55a0f8eb99fe044c9bc2", size = 764326, upload_time = "2024-05-24T12:58:06.944Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2a/11/f3777ad46c5d92e3ead121c22ea45fafb6c3b2c1edca0c0c6494969c125c/mizani-0.11.4-py3-none-any.whl", hash = "sha256:5b6271dc3da2c88694dca2e0e0a7e1879f0e2fb046c789776f54d090a5243735", size = 127428, upload_time = "2024-05-24T12:58:04.942Z" },
-]
-
-[[package]]
-name = "mpltern"
-version = "1.0.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "matplotlib" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b9/4a/6a4d93d676f21236362ebfff8534ffb74eb5fbda73fbe6c7f1c3ff5e251e/mpltern-1.0.4.tar.gz", hash = "sha256:204d54227406eea54b602abac1617d0e3c2c2484fbd6718f455c238bca7cc60d", size = 1365358, upload_time = "2024-04-25T20:52:42.044Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/60/f6/251635c032d4eca83fa880c27e40c9849ef74110d971c3a64f6347cb5a3d/mpltern-1.0.4-py3-none-any.whl", hash = "sha256:68b1f2cb140c2984bee30bed4b652614a3070136f6fbda2eeb9e750aeb44aa78", size = 32910, upload_time = "2024-04-25T20:52:40.849Z" },
 ]
 
 [[package]]
@@ -2494,18 +2441,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/96/2d/02d4312c973c6050a18b314a5ad0b3210edb65a906f868e31c111dede4a6/pluggy-1.5.0.tar.gz", hash = "sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1", size = 67955, upload_time = "2024-04-20T21:34:42.531Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/5f/e351af9a41f866ac3f1fac4ca0613908d9a41741cfcf2228f4ad853b697d/pluggy-1.5.0-py3-none-any.whl", hash = "sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669", size = 20556, upload_time = "2024-04-20T21:34:40.434Z" },
-]
-
-[[package]]
-name = "portalocker"
-version = "3.1.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pywin32", marker = "sys_platform == 'win32'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ac/91/8bfe23e1f7f630f2061ef38b5225d9fda9068d6a30fcbc187951e678e630/portalocker-3.1.1.tar.gz", hash = "sha256:ec20f6dda2ad9ce89fa399a5f31f4f1495f515958f0cb7ca6543cef7bb5a749e", size = 43708, upload_time = "2024-12-31T14:22:48.535Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f7/60/1974cfdd5bb770568ddc6f89f3e0df4cfdd1acffd5a609dff5e95f48c6e2/portalocker-3.1.1-py3-none-any.whl", hash = "sha256:80e984e24de292ff258a5bea0e4f3f778fff84c0ae1275dbaebc4658de4aacb3", size = 19661, upload_time = "2024-12-31T14:22:47.019Z" },
 ]
 
 [[package]]
@@ -3737,15 +3672,6 @@ wheels = [
 ]
 
 [[package]]
-name = "tabulate"
-version = "0.9.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ec/fe/802052aecb21e3797b8f7902564ab6ea0d60ff8ca23952079064155d1ae1/tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c", size = 81090, upload_time = "2022-10-06T17:21:48.54Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/40/44/4a5f08c96eb108af5cb50b41f76142f0afa346dfa99d5296fe7202a11854/tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f", size = 35252, upload_time = "2022-10-06T17:21:44.262Z" },
-]
-
-[[package]]
 name = "termcolor"
 version = "3.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3794,14 +3720,11 @@ name = "tinylang"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "calflops" },
     { name = "editables" },
-    { name = "fvcore" },
     { name = "hatchling" },
     { name = "imageio" },
     { name = "ipykernel" },
     { name = "matplotlib" },
-    { name = "mpltern" },
     { name = "notebook" },
     { name = "numpy" },
     { name = "opt-einsum" },
@@ -3822,16 +3745,22 @@ dependencies = [
     { name = "zoology" },
 ]
 
+[package.optional-dependencies]
+zoology = [
+    { name = "causal-conv1d" },
+    { name = "mamba-ssm" },
+    { name = "zoology" },
+]
+
 [package.metadata]
 requires-dist = [
-    { name = "calflops", specifier = ">=0.3.2" },
+    { name = "causal-conv1d", marker = "extra == 'zoology'" },
     { name = "editables", specifier = ">=0.5" },
-    { name = "fvcore", specifier = ">=0.1.5.post20221221" },
     { name = "hatchling", specifier = ">=1.27.0" },
     { name = "imageio", specifier = ">=2.37.0" },
     { name = "ipykernel", specifier = ">=6.29.5" },
+    { name = "mamba-ssm", marker = "extra == 'zoology'" },
     { name = "matplotlib" },
-    { name = "mpltern", specifier = ">=1.0.4" },
     { name = "notebook", specifier = ">=7.3.2" },
     { name = "numpy" },
     { name = "opt-einsum", specifier = ">=3.4.0" },
@@ -3850,7 +3779,9 @@ requires-dist = [
     { name = "umap-learn", specifier = ">=0.5.7" },
     { name = "wandb", specifier = ">=0.19.0" },
     { name = "zoology", git = "https://github.com/aryamanarora/zoology.git" },
+    { name = "zoology", marker = "extra == 'zoology'", git = "https://github.com/aryamanarora/zoology.git" },
 ]
+provides-extras = ["zoology"]
 
 [[package]]
 name = "tokenizers"
@@ -4316,18 +4247,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b2/40/8f902ab3bebda228a9b4de69eba988280285a7f7f167b942bc20bb562df9/xxhash-3.5.0-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fd1b2281d01723f076df3c8188f43f2472248a6b63118b036e641243656b1b0f", size = 32042, upload_time = "2024-08-17T09:20:33.562Z" },
     { url = "https://files.pythonhosted.org/packages/db/87/bd06beb8ccaa0e9e577c9b909a49cfa5c5cd2ca46034342d72dd9ce5bc56/xxhash-3.5.0-pp39-pypy39_pp73-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:9c770750cc80e8694492244bca7251385188bc5597b6a39d98a9f30e8da984e0", size = 40516, upload_time = "2024-08-17T09:20:36.004Z" },
     { url = "https://files.pythonhosted.org/packages/bb/f8/505385e2fbd753ddcaafd5550eabe86f6232cbebabad3b2508d411b19153/xxhash-3.5.0-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:b150b8467852e1bd844387459aa6fbe11d7f38b56e901f9f3b3e6aba0d660240", size = 30108, upload_time = "2024-08-17T09:20:37.214Z" },
-]
-
-[[package]]
-name = "yacs"
-version = "0.1.8"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pyyaml" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/44/3e/4a45cb0738da6565f134c01d82ba291c746551b5bc82e781ec876eb20909/yacs-0.1.8.tar.gz", hash = "sha256:efc4c732942b3103bea904ee89af98bcd27d01f0ac12d8d4d369f1e7a2914384", size = 11100, upload_time = "2020-08-10T16:37:47.755Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/38/4f/fe9a4d472aa867878ce3bb7efb16654c5d63672b86dc0e6e953a67018433/yacs-0.1.8-py3-none-any.whl", hash = "sha256:99f893e30497a4b66842821bac316386f7bd5c4f47ad35c9073ef089aa33af32", size = 14747, upload_time = "2020-08-10T16:37:46.4Z" },
 ]
 
 [[package]]
