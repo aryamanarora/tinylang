@@ -18,7 +18,7 @@ The `Experiment` class in `tinylang/experiment.py` wraps a whole experiment.
 - `tinylang/language/` includes generators for formal languages we want to train on.
 - `tinylang/eval/` includes evaluators which run during training to assess the learning progress of the model. These are both our proposed mechanistic evaluators, as well as traditional behavioural evaluators (e.g. task accuracy).
 
-We generate language train/test sets in `languages/` and store config files in `yaml` format in `experiments/configs`. When you run an experiment, it will log to a subfolder of `experiments/logs`.
+We store language config files in `yaml` format in `languages/` and store experiment configs in `experiments/configs`. When you run an experiment, it will log to a subfolder of `experiments/logs`.
 
 ## Instructions
 
@@ -37,3 +37,11 @@ uv run tinylang experiments/configs/[YOUR CONFIG FILE].yaml
 ```
 
 This will run a full training experiment, and store plots and logging data along with the model checkpoint in the log dir.
+
+To generate a language (or set of languages), make a config folder in `languages/`. Then, run
+
+```
+uv run make_languages.py -c [YOUR CONFIG FOLDER]
+```
+
+This will create a language and store it as a `pkl` file in the same subdirectory as the config file.
