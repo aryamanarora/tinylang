@@ -3742,7 +3742,6 @@ dependencies = [
     { name = "transformers" },
     { name = "umap-learn" },
     { name = "wandb" },
-    { name = "zoology" },
 ]
 
 [package.optional-dependencies]
