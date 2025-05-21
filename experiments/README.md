@@ -10,7 +10,7 @@ In the paper, we report aggregation of results from the following configs:
     * `pcfg_easy_8192`
     * `pcfg_medium`, `pcfg_medium_nope` (NoPE for non-attention only)
 * Section 5.3:
-    * `new_gen`
+    * `pcfg_gen`, `pcfg_gen_1L`, `pcfg_gen_3L`
 * Section 5.4:
     * `ar_32_mamba_ablation`,
     * `ar_32_based_ablation`, `ar_32_based_ablation2`
@@ -27,4 +27,4 @@ And in the appendices:
 * Appendix D.3:
     * `ar_32_3L`
 * Appendix D.4:
-    * `multihop`, `multihop_1`, `multihop_3`
+    * `sibling`, `sibling_1L`, `sibling_3L`
