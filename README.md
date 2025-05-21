@@ -6,7 +6,7 @@
 
 **Tinylang** is a framework for performing mechanistic evaluations of language model architectures on synthetic tasks. This repo includes all code for the synthetic tasks, training and logging for models, interventions for the mechanistic evaluations, and model architecture definitions.
 
-We would like to thank the creaters of the [`zoology`](https://github.com/HazyResearch/zoology) library for providing easy-to-use implementations of many SSMs used in this repo!
+We thank the creators of the [`zoology`](https://github.com/HazyResearch/zoology) library for providing easy-to-use implementations of many SSMs used in this repo!
 
 ---
 
