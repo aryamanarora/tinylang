@@ -27,7 +27,6 @@ dependencies = [
     "transformers>=4.48.2",
     "umap-learn>=0.5.7",
     "wandb>=0.19.0",
-    "zoology",
 ]
 
 [project.optional-dependencies]
@@ -46,3 +45,6 @@ zoology = { git = "https://github.com/aryamanarora/zoology.git" }
 
 [project.scripts]
 tinylang = "tinylang.main:main"
+
+[tool.uv]
+no-build-isolation-package = ["zoology", "causal-conv1d", "mamba-ssm"]
