@@ -87,17 +87,15 @@ class AR(Language):
 
         # set up query
         if self.query_type == "key":
-            query = keys[q_pos]
-            answer = values[q_pos]
+            query = keys[q_pos] + self.KEY_START
+            answer = values[q_pos] + self.VALUE_START
             q, a = q_pos * 2, q_pos * 2 + 1
         else:
-            query = values[q_pos]
-            answer = keys[q_pos]
+            query = values[q_pos] + self.VALUE_START
+            answer = keys[q_pos] + self.KEY_START
             q, a = q_pos * 2 + 1, q_pos * 2
 
         # add query and answer to sentence
-        query += self.KEY_START
-        answer += self.VALUE_START
         sentence.extend([query, answer])
         sentence = sentence + [self.EOS]
 
