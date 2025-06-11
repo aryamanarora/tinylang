@@ -7,11 +7,11 @@ import argparse
 import yaml
 import glob
 
-def load_config(config_path):
+def load_config(config_path: str) -> dict:
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
 
-def generate_language(config_path, output_name):
+def generate_language(config_path: str, output_name: str) -> None:
     # fix all seeds
     torch.manual_seed(42)
     np.random.seed(42)
@@ -20,8 +20,8 @@ def generate_language(config_path, output_name):
     config = load_config(config_path)
     language = Language.from_config(config)
     language.prepare_sets(
-        train_set_size=100032,
-        eval_set_size=1024,
+        train_set_size=config.get("train_set_size", 100032),
+        eval_set_size=config.get("eval_set_size", 1024),
     )
     print(output_name)
     for k, v in language.stats["test"].items():

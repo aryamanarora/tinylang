@@ -1,0 +1,8 @@
+class: "AR"
+config:
+  num_kv: 8192
+  max_length: 32
+  min_length: 32
+  query_type: "value"
+  mask_nonquery: true
+  prepare_train_set: true

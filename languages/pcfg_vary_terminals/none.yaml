@@ -1,0 +1,15 @@
+class: PCFG
+config:
+  head_position: right
+  mask_nonquery: true
+  max_depth: 10
+  max_rhs_len: 5
+  max_rules_per_nt: 5
+  no_child_queries: true
+  no_sibling_queries: true
+  num_nonterminals: 40
+  num_terminals: 20
+  prepare_train_set: true
+  train_test_split: 0.0
+  transparent_nonterminals: false
+  unambiguous_queries: true

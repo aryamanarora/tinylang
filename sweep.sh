@@ -24,6 +24,12 @@ if [[ -z "$FOLDER" ]]; then
     exit 1
 fi
 
+# run make_sweep.py inside the folder
+CURRENT_DIR=$(pwd)
+cd $FOLDER
+uv run make_sweep.py
+cd $CURRENT_DIR
+
 for file in $FOLDER/$FILE_PREFIX*.yaml; do
     filename=$(basename "$file" .yaml)
     # skip if filename is template.yaml

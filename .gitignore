@@ -20,4 +20,8 @@ wandb/
 # dont check in logs
 experiments/logs*/*
 subspace/logs/*
-languages/*/*.pkl
+*.pkl
+
+# yamls (only templates kept)
+experiments/configs/**/*.yaml
+!experiments/configs/**/template.yaml
