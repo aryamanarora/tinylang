@@ -74,6 +74,10 @@ class TransformerBlock(nn.Module):
         # first pre-norm op (attention or equivalent)
         hidden_states = self.norm1(residual.to(dtype=self.norm1.weight.dtype))
         hidden_states = self.sequence_mixer(hidden_states)
+        if isinstance(hidden_states, tuple): # for fla layers
+            hidden_states = hidden_states[0]
+        else:
+            assert isinstance(hidden_states, torch.Tensor), f"hidden_states is not a tensor: {type(hidden_states)}"
         dropped = self.drop_path1(self.dropout1(hidden_states))
         residual = (dropped + residual) if residual is not None else dropped
 

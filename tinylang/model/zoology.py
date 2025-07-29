@@ -160,14 +160,28 @@ class Zoology(Model):
                     "bias": bias,
                 }
             ),
+            "delta_net": dict(
+                name="fla.layers.DeltaNet", # uses d_model so we're good
+                kwargs={
+                    "conv_bias": bias,
+                }
+            ),
+            "gated_delta_net": dict(
+                name="fla.layers.GatedDeltaNet", # uses d_model so we're good
+                kwargs={
+                    "conv_bias": bias,
+                }
+            ),
         }
 
-        # set d_conv for mamba and base_conv (including inside based)
+        # set d_conv for mamba, base_conv (including inside based), delta_net, gated_delta_net
         if d_conv is not None:
             MIXERS["mamba"]["kwargs"]["d_conv"] = d_conv
             MIXERS["mamba_no_causal_conv1d"]["kwargs"]["d_conv"] = d_conv
             MIXERS["base_conv"]["kwargs"]["kernel_size"] = d_conv
             MIXERS["based"]["kwargs"]["configs"][0]["kwargs"]["kernel_size"] = d_conv
+            MIXERS["delta_net"]["kwargs"]["conv_size"] = d_conv
+            MIXERS["gated_delta_net"]["kwargs"]["conv_size"] = d_conv
 
         # add MLP or GLU to model
         state_mixer = dict(name="torch.nn.Identity", kwargs={})
