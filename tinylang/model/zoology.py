@@ -163,13 +163,17 @@ class Zoology(Model):
             "delta_net": dict(
                 name="fla.layers.DeltaNet", # uses d_model so we're good
                 kwargs={
+                    "num_heads": n_head,
                     "conv_bias": bias,
+                    "hidden_size": n_embd,
                 }
             ),
             "gated_delta_net": dict(
                 name="fla.layers.GatedDeltaNet", # uses d_model so we're good
                 kwargs={
+                    "num_heads": n_head,
                     "conv_bias": bias,
+                    "hidden_size": n_embd,
                 }
             ),
         }
@@ -208,6 +212,9 @@ class Zoology(Model):
             name="default",
         )
         self.model = LanguageModel(self.config)
+
+        # set dtype
+        self.model.to(dtype=torch.bfloat16)
 
         # to satisfy pyvene
         self.model.config = self.config

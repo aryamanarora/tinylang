@@ -65,6 +65,7 @@ class MambaNoCausalConv1D(nn.Module):
 
         self.in_proj = nn.Linear(self.d_model, self.d_inner * 2, bias=bias, **factory_kwargs)
 
+        self.conv1d_input = nn.Identity()
         self.conv1d = nn.Conv1d(
             in_channels=self.d_inner,
             out_channels=self.d_inner,
@@ -74,9 +75,12 @@ class MambaNoCausalConv1D(nn.Module):
             padding=d_conv - 1,
             **factory_kwargs,
         )
+        self.conv1d_output = nn.Identity()
 
         self.activation = "silu"
+        self.act_input = nn.Identity()
         self.act = nn.SiLU()
+        self.act_output = nn.Identity()
 
         self.x_proj = nn.Linear(
             self.d_inner, self.dt_rank + self.d_state * 2, bias=False, **factory_kwargs
@@ -170,7 +174,12 @@ class MambaNoCausalConv1D(nn.Module):
                 # Instead F.pad will pad with zeros if seqlen < self.d_conv, and truncate otherwise.
                 conv_state.copy_(F.pad(x, (self.d_conv - x.shape[-1], 0)))  # Update state (B D W)
             if True:
-                x = self.act(self.conv1d(x)[..., :seqlen])
+                x = self.conv1d_input(x.permute(0, 2, 1)).permute(0, 2, 1) # normal -> pyvene -> normal
+                x = self.conv1d(x)[..., :seqlen]
+                x = self.conv1d_output(x.permute(0, 2, 1)).permute(0, 2, 1) # normal -> pyvene -> normal
+                x = self.act_input(x.permute(0, 2, 1)).permute(0, 2, 1) # normal -> pyvene -> normal
+                x = self.act(x)
+                x = self.act_output(x.permute(0, 2, 1)).permute(0, 2, 1) # normal -> pyvene -> normal
             else:
                 assert self.activation in ["silu", "swish"]
                 x = causal_conv1d_fn(

@@ -56,13 +56,47 @@ pv.type_to_dimension_mapping[LanguageModel] = {
 }
 
 
+class VanillaIntervention(pv.Intervention, pv.LocalistRepresentationIntervention):
+
+    """For debugging purposes."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def forward(self, base, source, subspaces=None, **kwargs):
+        old_base = base.clone()
+        old_source = source.clone()
+        result = pv._do_intervention_by_swap(
+            base,
+            source if self.source_representation is None else self.source_representation,
+            "interchange",
+            self.interchange_dim,
+            subspaces,
+            subspace_partition=self.subspace_partition,
+            use_fast=self.use_fast,
+        )
+        print(kwargs)
+        print(
+            "hi result",
+            result.shape,
+            f"{torch.isclose(old_base, old_source).sum() / old_base.numel():.3%}",
+            f"{torch.isclose(result, old_base).sum() / result.numel():.3%}",
+            f"{torch.isclose(result, old_source).sum() / result.numel():.3%}",
+        )
+        return result
+
+    def __str__(self):
+        return f"VanillaIntervention()"
+
+
 class InterchangeEvaluator(Evaluator):
     def __str__(self):
         return "InterchangeEvaluator"
 
-    def __init__(self, run_every_n_steps: int):
+    def __init__(self, run_every_n_steps: int, swap_corrupt_and_orig: bool = False):
         super().__init__(run_every_n_steps)
         self.do_batching = False
+        self.swap_corrupt_and_orig = swap_corrupt_and_orig
 
     @torch.no_grad()
     def eval(self, model: Model, language: Language, inputs: dict, outputs: dict, step: int):
@@ -75,7 +109,7 @@ class InterchangeEvaluator(Evaluator):
         for component in components:
             maxes_layer = defaultdict(lambda: defaultdict(lambda: (0, "nothing")))
             for layer in range(model.n_layer):
-                config = {"layer": layer, "component": component, "unit": "pos"}
+                config = {"layer": layer, "component": component, "unit": "pos"} # , "intervention_type": VanillaIntervention
                 pv_config = pv.IntervenableConfig(config)
                 pv_gpt2 = pv.IntervenableModel(pv_config, model=model.model)
                 pv_gpt2.disable_model_gradients()
@@ -95,7 +129,8 @@ class InterchangeEvaluator(Evaluator):
                             pos_to_change = probing_schemas[batch_idx]["queries"][label_type]["pos"]
                             orig_value = probing_schemas[batch_idx]["target_distributions"][label_type]
                             orig_token_value = input_ids[pos_to_change]
-                            # corrupted_value = random.choice([x for x in input_ids[1:divider_pos] if x != orig_token_value])
+
+                            # corrupt the intervention token by selecting a random terminal token (except the original)
                             corrupted_value = random.randint(language.TERMINAL_START, language.QUERY_START - 2)
                             corrupted_value += (1 if corrupted_value >= orig_token_value else 0)
 
@@ -105,22 +140,21 @@ class InterchangeEvaluator(Evaluator):
                             all_inputs.append(input_ids)
                             all_corrupted_inputs.append(corrupted_input_ids)
 
-                            pos_to_intervene = probing_schemas[batch_idx]["queries"][query]["pos"]
-                            all_unit_locations.append(int(pos_to_intervene))
+                            pos_to_intervene = [int(probing_schemas[batch_idx]["queries"][query]["pos"])]
+                            all_unit_locations.append(pos_to_intervene)
 
-                            # if label_type == "query_item_orig":
-                            #     print(language.prettify(inputs["input_ids"][batch_idx], probing_schemas[batch_idx])[0])
-                            #     print(language.prettify(corrupted_input_ids))
-                            #     input()
-
+                        # swap the base and corrupted inputs if needed
+                        # necessity / sufficiency
                         base_inputs = {"input_ids": torch.stack(all_inputs)}
                         corrupted_inputs = {"input_ids": torch.stack(all_corrupted_inputs)}
+                        if self.swap_corrupt_and_orig:
+                            base_inputs, corrupted_inputs = corrupted_inputs, base_inputs
 
                         # do the intervention at the query position
                         corrupted_outputs, intervened_outputs = pv_gpt2(
                             base=corrupted_inputs,
                             sources=[base_inputs],
-                            unit_locations={"sources->base": ([[[x] for x in all_unit_locations]], [[[x] for x in all_unit_locations]])},
+                            unit_locations={"sources->base": ([[x for x in all_unit_locations]], [[x for x in all_unit_locations]])},
                             output_original_output=True,
                         )
                         if type(model) != Zoology:
@@ -148,7 +182,6 @@ class InterchangeEvaluator(Evaluator):
                             intervened_logit = intervened_logit[orig_output]
                             corrupted_logit = corrupted_logit[orig_output]
                             original_logit = original_logits[pos_to_check][orig_output]
-                            # percent_restored = (intervened_prob - corrupted_prob) / (original_prob - corrupted_prob)
 
                             label_wo_layer = f"{t}.{label_type}.{query}.{component}"
                             label = f"{layer}.{label_wo_layer}"
@@ -167,7 +200,6 @@ class InterchangeEvaluator(Evaluator):
                             self.all_eval_stats[step][f"{label_corrupted}.restored_logit"].append(corrupted_logit.item())
                             self.all_eval_stats[step][f"{label_original}.restored_logit"].append(original_logit.item())
                             self.all_eval_stats[step][f"{label}.logit_diff"].append(intervened_logit.item() - corrupted_logit.item())
-                            # self.all_eval_stats[step][f"{label}.percent_restored"].append(percent_restored.item())
 
                     # log max counts
                     query_counts = Counter([q for _, q in maxes_pos.values()])
@@ -186,12 +218,6 @@ class InterchangeEvaluator(Evaluator):
                     self.all_eval_stats[step][f"{label}.max_perc_layer"].append(layer_counts[layer] / len(maxes_layer[subset]))
                 
     def post_eval(self, step: int):
-        # for ending in ["kl_div", "restored_prob", "restored_logit", "prob_diff", "logit_diff"]:
-        #     top = [(np.mean(v), k) for k, v in self.all_eval_stats[step].items() if k.endswith(ending)]
-        #     for v, k in sorted(top):
-        #         print(f"{k:>80}: {v:.5f}")
-        #     print('------')
-        
         # memoisation score
         all_keys = list(self.all_eval_stats[step].keys())
         memo_keys = set()
@@ -202,7 +228,6 @@ class InterchangeEvaluator(Evaluator):
                     memo_keys.add(f"{memo_key}.memo_score")
         for key in memo_keys:
             self.all_eval_stats[step][key] = max(self.all_eval_stats[step][key])
-            # print(f"{key}: {self.all_eval_stats[step][key]:.5f}")
 
 
     def plot(self, log_dir: str):
