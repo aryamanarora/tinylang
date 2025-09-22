@@ -2,7 +2,7 @@ import yaml
 from copy import deepcopy
 
 ablations = {
-    "mixer_type": ["attention", "hyena", "base_conv", "h3", "based", "mamba"],
+    "mixer_type": ["attention", "hyena", "base_conv", "h3", "based", "mamba", "delta_net"],
     "n_embd": [16, 32, 64, 128, 256],
     "lr": [1e-2, 3e-2],
 }
