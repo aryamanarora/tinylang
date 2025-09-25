@@ -1,6 +1,6 @@
 <div align="center">
   <a align="center"><img src="https://github.com/user-attachments/assets/47a9d660-abb2-4d74-9a4d-da4bcfadd671" width="100" height="100" /></a>
-  <h1 align="center">Tinylang <sub>by <a href="https://github.com/stanfordnlp/pyvene">pyvene</a></sub></h1>
+  <h1 align="center">Tinylang</h1>
   <!-- <a href="..."><strong>Read our paper »</strong></a> -->
 </div>
 
