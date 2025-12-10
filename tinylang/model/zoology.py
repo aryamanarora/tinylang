@@ -1,10 +1,33 @@
 # from zoology.model import LanguageModel
 # from zoology.config import ModelConfig
-from .arch.zoology import ModelConfig, LanguageModel
 from transformers.loss.loss_utils import ForCausalLMLoss
 from .model import Model
 import torch
 from einops import rearrange
+import warnings
+
+try:
+    from .arch.zoology import ModelConfig, LanguageModel
+    _ZOOLOGY_AVAILABLE = True
+    _ZOOLOGY_IMPORT_ERROR = None
+except ImportError as exc:
+    ModelConfig = None
+    LanguageModel = None
+    _ZOOLOGY_AVAILABLE = False
+    _ZOOLOGY_IMPORT_ERROR = exc
+    warnings.warn(
+        "tinylang: zoology dependencies are missing; Zoology models are unavailable. "
+        "Install with `pip install 'tinylang[zoology]'` to enable them.",
+        stacklevel=2,
+    )
+
+
+def _require_zoology():
+    if not _ZOOLOGY_AVAILABLE:
+        raise ImportError(
+            "Zoology dependencies are not installed. Install tinylang with the "
+            "`zoology` extra (e.g. `pip install 'tinylang[zoology]'`) to use Zoology models."
+        ) from _ZOOLOGY_IMPORT_ERROR
 
 
 class Zoology(Model):
@@ -23,6 +46,7 @@ class Zoology(Model):
         pos_emb: bool = True,
         d_conv: int | None = None,
     ):
+        _require_zoology()
         n_inner = 4 * n_embd if n_inner is None else n_inner
         self.n_layer = n_layer
 

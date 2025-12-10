@@ -28,32 +28,33 @@ memo_map = {
     "memo_logit_div_out_diff": re.compile(r"\d+\.PARENT\.target_item_orig\.divider\.attention_output\.logit_diff")
 }
 
-# support for zoology models
-pv.type_to_module_mapping[LanguageModel] = {
-    "block_input": ("backbone.layers[%s]", 
-                    pv.models.constants.CONST_INPUT_HOOK),
-    "block_output": ("backbone.layers[%s]", 
-                      pv.models.constants.CONST_OUTPUT_HOOK),
-    "attention_input": ("backbone.layers[%s].sequence_mixer", 
+if LanguageModel is not None:
+    # support for zoology models
+    pv.type_to_module_mapping[LanguageModel] = {
+        "block_input": ("backbone.layers[%s]", 
                         pv.models.constants.CONST_INPUT_HOOK),
-    "attention_output": ("backbone.layers[%s].sequence_mixer", 
-                        pv.models.constants.CONST_OUTPUT_HOOK),
-    "mlp_input": ("backbone.layers[%s].state_mixer", 
-                  pv.models.constants.CONST_INPUT_HOOK),
-    "mlp_output": ("backbone.layers[%s].state_mixer", 
-                   pv.models.constants.CONST_OUTPUT_HOOK),
-    "final_layernorm_input": ("backbone.ln_f", 
-                              pv.models.constants.CONST_INPUT_HOOK),
-}
-pv.type_to_dimension_mapping[LanguageModel] = {
-    "block_input": ("d_model",),
-    "block_output": ("d_model",),
-    "attention_input": ("d_model",),
-    "attention_output": ("d_model",),
-    "mlp_input": ("d_model",),
-    "mlp_output": ("d_model",),
-    "final_layernorm_input": ("d_model",),
-}
+        "block_output": ("backbone.layers[%s]", 
+                          pv.models.constants.CONST_OUTPUT_HOOK),
+        "attention_input": ("backbone.layers[%s].sequence_mixer", 
+                            pv.models.constants.CONST_INPUT_HOOK),
+        "attention_output": ("backbone.layers[%s].sequence_mixer", 
+                            pv.models.constants.CONST_OUTPUT_HOOK),
+        "mlp_input": ("backbone.layers[%s].state_mixer", 
+                      pv.models.constants.CONST_INPUT_HOOK),
+        "mlp_output": ("backbone.layers[%s].state_mixer", 
+                       pv.models.constants.CONST_OUTPUT_HOOK),
+        "final_layernorm_input": ("backbone.ln_f", 
+                                  pv.models.constants.CONST_INPUT_HOOK),
+    }
+    pv.type_to_dimension_mapping[LanguageModel] = {
+        "block_input": ("d_model",),
+        "block_output": ("d_model",),
+        "attention_input": ("d_model",),
+        "attention_output": ("d_model",),
+        "mlp_input": ("d_model",),
+        "mlp_output": ("d_model",),
+        "final_layernorm_input": ("d_model",),
+    }
 
 
 class VanillaIntervention(pv.Intervention, pv.LocalistRepresentationIntervention):

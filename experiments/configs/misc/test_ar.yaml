@@ -35,6 +35,6 @@ evaluators:
 training:
   train_batch_size: 16
   num_train_steps: 5000
-  eval_batch_size: 64
+  eval_batch_size: 16
   num_eval_steps: 1
   lr: 1e-4
