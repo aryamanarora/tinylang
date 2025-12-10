@@ -6,3 +6,12 @@ repos:
         name: nbstripout - strip notebook outputs
         description: Strip outputs from Jupyter notebooks
         files: \.ipynb$
+  - repo: local
+    hooks:
+      - id: remove-out-files
+        name: Remove .out files
+        description: Remove all .out files from filesystem and git
+        entry: bash -c 'git rm --cached *.out 2>/dev/null || true; rm -f *.out'
+        language: system
+        always_run: true
+        pass_filenames: false
