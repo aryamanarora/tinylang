@@ -17,8 +17,9 @@ class LCAEvaluator(Evaluator):
     def __str__(self):
         return "LCAEvaluator"
 
-    def __init__(self, run_every_n_steps: int):
+    def __init__(self, run_every_n_steps: int, interpolation_steps: int = 1):
         super().__init__(run_every_n_steps)
+        self.interpolation_steps = interpolation_steps
         self.last_step_weights = None
         self.last_step_activations = None  # {example_idx: {layer_name: (seq_len, d_model)}}
         self.per_weight_attribs = defaultdict(list)
@@ -46,82 +47,128 @@ class LCAEvaluator(Evaluator):
         # Track a readable example for logging later.
         self.examples_by_step[step] = self._format_example(language, inputs)
 
-        # Find layers to hook for activation gradients
+        # Find layers to hook for activation attributions
         layers_to_hook = []
         backbone = getattr(model_module, "backbone", None)
         if backbone is not None and hasattr(backbone, "layers"):
             for i, layer in enumerate(backbone.layers):
                 layers_to_hook.append((f"layer_{i}", layer))
 
+        # Keep track of current activations for next step's delta (like weights)
         prev_activations = self.last_step_activations
         current_activations = {}  # {example_idx: {layer_name: tensor}}
         self.per_activation_attribs[step] = []
 
+        n_interp = self.interpolation_steps
+
         # No batching: run backward one example at a time.
         for idx in tqdm(range(inputs["input_ids"].size(0)), desc=f"Running backward passes for step {step}"):
-            model_module.zero_grad(set_to_none=True)
+            input_ids = inputs["input_ids"][idx : idx + 1].to(device)
+            labels = inputs["labels"][idx : idx + 1].to(device)
 
-            # Register hooks to capture activations (forward) and gradients (backward)
-            activations = {}
-            activation_grads = {}
-            handles = []
+            # Accumulators for integrated gradients (on CPU)
+            accumulated_weight_grads = {k: torch.zeros_like(v, device="cpu") for k, v in weight_deltas.items()}
+            accumulated_activation_attribs = {}  # sum of (delta_act * grad) at each step
+            prev_interp_activations = prev_activations[idx] if (prev_activations is not None and idx in prev_activations) else None
 
-            def make_fwd_hook(name):
-                def hook(module, input, output):
-                    activations[name] = output.detach().cpu()
-                return hook
+            # Interpolate from prev_weights to current_weights
+            for interp_idx in range(n_interp):
+                alpha = (interp_idx + 1) / n_interp  # use right endpoint of each interval
 
-            def make_bwd_hook(name):
-                def hook(module, grad_input, grad_output):
-                    activation_grads[name] = grad_output[0].detach().cpu()
-                return hook
+                # Set model weights to interpolated values
+                interpolated_state = {}
+                for k in prev_weights:
+                    if k in weight_deltas:
+                        interpolated_state[k] = (prev_weights[k] + alpha * weight_deltas[k]).to(device)
+                    else:
+                        interpolated_state[k] = current_weights[k].to(device)
+                model_module.load_state_dict(interpolated_state)
 
-            for name, layer in layers_to_hook:
-                handles.append(layer.register_forward_hook(make_fwd_hook(name)))
-                handles.append(layer.register_full_backward_hook(make_bwd_hook(name)))
+                model_module.zero_grad(set_to_none=True)
 
-            with torch.enable_grad():
-                input_ids = inputs["input_ids"][idx : idx + 1].to(device)
-                labels = inputs["labels"][idx : idx + 1].to(device)
-                loss = model.step(input_ids, labels)["loss"]
-            loss.backward()
+                # Register hooks to capture activations (forward) and gradients (backward)
+                activations = {}
+                activation_grads = {}
+                handles = []
 
-            # Remove hooks
-            for handle in handles:
-                handle.remove()
+                def make_fwd_hook(name):
+                    def hook(module, input, output):
+                        activations[name] = output.detach().cpu()
+                    return hook
 
-            # Store current activations for next step's delta
-            current_activations[idx] = activations
+                def make_bwd_hook(name):
+                    def hook(module, grad_input, grad_output):
+                        activation_grads[name] = grad_output[0].detach().cpu()
+                    return hook
 
-            # Compute activation attributions: grad * delta (cumulative)
-            activation_attribs = {}
-            if prev_activations is not None and idx in prev_activations:
-                for name in activations:
-                    if name in activation_grads and name in prev_activations[idx]:
-                        delta = activations[name] - prev_activations[idx][name]
-                        activation_attribs[name] = activation_grads[name] * delta
-                        # Accumulate from previous step
-                        if prev_step is not None and self.per_activation_attribs[prev_step]:
-                            prev_attrib = self.per_activation_attribs[prev_step][idx].get(name, 0)
-                            activation_attribs[name] = activation_attribs[name] + prev_attrib
-            self.per_activation_attribs[step].append(activation_attribs)
+                for name, layer in layers_to_hook:
+                    handles.append(layer.register_forward_hook(make_fwd_hook(name)))
+                    handles.append(layer.register_full_backward_hook(make_bwd_hook(name)))
 
-            # Compute weight attributions: grad * delta_weight
-            example_attribs = {}
-            for name, param in model_module.named_parameters():
-                if param.grad is None or name not in weight_deltas:
+                with torch.enable_grad():
+                    loss = model.step(input_ids, labels)["loss"]
+                loss.backward()
+
+                # Remove hooks
+                for handle in handles:
+                    handle.remove()
+
+                # Accumulate weight gradients
+                for name, param in model_module.named_parameters():
+                    if param.grad is not None and name in accumulated_weight_grads:
+                        accumulated_weight_grads[name] += param.grad.detach().cpu()
+
+                # Compute activation attributions for this interpolation step: delta_act * grad
+                for name in activation_grads:
+                    if prev_interp_activations is not None and name in prev_interp_activations:
+                        activation_delta = activations[name] - prev_interp_activations[name]
+                        step_attrib = activation_delta * activation_grads[name]
+                        if name not in accumulated_activation_attribs:
+                            accumulated_activation_attribs[name] = torch.zeros_like(step_attrib)
+                        accumulated_activation_attribs[name] += step_attrib
+
+                # Current activations become previous for next interpolation step
+                prev_interp_activations = activations
+
+            # Restore current weights
+            model_module.load_state_dict({k: v.to(device) for k, v in current_weights.items()})
+
+            # Store final activations (at alpha=1) for next eval step's delta
+            # prev_interp_activations now holds the final activations after the loop
+            current_activations[idx] = prev_interp_activations if prev_interp_activations is not None else {}
+
+            # Compute activation attributions: already accumulated as sum of (delta_act * grad) per interpolation step
+            example_activation_attribs = {}
+            for name in accumulated_activation_attribs:
+                example_activation_attribs[name] = accumulated_activation_attribs[name]
+                # Sum over d_model like weights do
+                if len(example_activation_attribs[name].shape) > 1:
+                    for dim in range(example_activation_attribs[name].dim()):
+                        if example_activation_attribs[name].shape[dim] == model.config.d_model:
+                            example_activation_attribs[name] = example_activation_attribs[name].sum(dim=dim, keepdim=True)
+                # Accumulate from previous eval step
+                if prev_step is not None and self.per_activation_attribs[prev_step]:
+                    example_activation_attribs[name] = example_activation_attribs[name] + self.per_activation_attribs[prev_step][idx].get(name, 0)
+            self.per_activation_attribs[step].append(example_activation_attribs)
+
+            # Compute weight attributions: mean(grads) * delta
+            example_weight_attribs = {}
+            for name in accumulated_weight_grads:
+                if name not in weight_deltas:
                     continue
-                grad_detach = param.grad.detach()
-                example_attribs[name] = (weight_deltas[name] * grad_detach)  # .sum()
-                if len(example_attribs[name].shape) > 1:
-                    for dim in range(example_attribs[name].dim()):
-                        if example_attribs[name].shape[dim] == model.config.d_model:
-                            example_attribs[name] = example_attribs[name].sum(dim=dim, keepdim=True)
+                mean_grad = accumulated_weight_grads[name] / n_interp
+                example_weight_attribs[name] = weight_deltas[name].cpu() * mean_grad
+                # Sum over d_model
+                if len(example_weight_attribs[name].shape) > 1:
+                    for dim in range(example_weight_attribs[name].dim()):
+                        if example_weight_attribs[name].shape[dim] == model.config.d_model:
+                            example_weight_attribs[name] = example_weight_attribs[name].sum(dim=dim, keepdim=True)
+                # Accumulate from previous step
                 if prev_step is not None:
-                    example_attribs[name] += self.per_weight_attribs[prev_step][idx].get(name, 0)
-            self.per_weight_attribs[step].append(example_attribs)
+                    example_weight_attribs[name] = example_weight_attribs[name] + self.per_weight_attribs[prev_step][idx].get(name, 0)
+            self.per_weight_attribs[step].append(example_weight_attribs)
 
-        # Save activations for next step
+        # Save activations for next step (like last_step_weights)
         self.last_step_activations = current_activations
 
     def _format_example(self, language: Language, inputs: dict) -> dict:
@@ -346,10 +393,11 @@ class LCAEvaluator(Evaluator):
                 if layer_name not in attribs:
                     continue
                 a = attribs[layer_name]
-                if a.dim() == 3:
-                    a = a.squeeze(0)
-                pos_attrib = a.sum(dim=-1)
-                global_vmax = max(global_vmax, np.abs(pos_attrib.numpy()).max())
+                # Squeeze out batch and any singleton dims from d_model summing
+                a = a.squeeze()  # (seq_len,) or (seq_len, 1) -> (seq_len,)
+                if a.dim() > 1:
+                    a = a.squeeze(-1)
+                global_vmax = max(global_vmax, np.abs(a.numpy()).max())
 
         # For each step, plot a heatmap of attribution sums (layers x positions)
         for step in steps:
@@ -361,24 +409,24 @@ class LCAEvaluator(Evaluator):
             attribs = example_attribs[0]
             example_info = self.examples_by_step.get(step)
 
-            # Build matrix: (n_layers, seq_len) with attribution sum per position
+            # Build matrix: (n_layers, seq_len) with attribution per position
             seq_len = None
-            attrib_sums = []
+            attrib_values = []
             for layer_name in layer_names:
                 if layer_name not in attribs:
                     continue
-                a = attribs[layer_name]  # (1, seq_len, d_model)
-                if a.dim() == 3:
-                    a = a.squeeze(0)  # (seq_len, d_model)
-                # Sum across d_model to get per-position attribution
-                pos_attrib = a.sum(dim=-1)  # (seq_len,)
-                attrib_sums.append(pos_attrib.numpy())
-                seq_len = pos_attrib.shape[0]
+                a = attribs[layer_name]  # already summed over d_model
+                # Squeeze out batch and any singleton dims
+                a = a.squeeze()
+                if a.dim() > 1:
+                    a = a.squeeze(-1)
+                attrib_values.append(a.numpy())
+                seq_len = a.shape[0]
 
-            if not attrib_sums:
+            if not attrib_values:
                 continue
 
-            attrib_matrix = np.stack(attrib_sums, axis=0)  # (n_layers, seq_len)
+            attrib_matrix = np.stack(attrib_values, axis=0)  # (n_layers, seq_len)
 
             fig, ax = plt.subplots(figsize=(max(12, seq_len * 0.3), len(layer_names) * 0.5 + 2))
             # Use diverging colormap with global vmax for consistent scale
@@ -431,8 +479,6 @@ class LCAEvaluator(Evaluator):
                 if layer_name not in attribs:
                     continue
                 a = attribs[layer_name]
-                if a.dim() == 3:
-                    a = a.squeeze(0)
                 total = a.sum().item()
                 records.append({"step": step, "layer": layer_name, "value": total})
 
