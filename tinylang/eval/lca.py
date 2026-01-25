@@ -491,6 +491,7 @@ class LCAEvaluator(Evaluator):
         # Also plot total attribution trajectory over steps, faceted by example
         records = []
         for step in steps:
+            # Activation attributions per layer
             example_attribs = self.per_activation_attribs[step]
             if not example_attribs:
                 continue
@@ -502,7 +503,16 @@ class LCAEvaluator(Evaluator):
                         continue
                     a = attribs[layer_name]
                     total = a.sum().item()
-                    records.append({"step": step, "layer": layer_name, "example": ex_idx, "value": total})
+                    records.append({"step": step, "layer": layer_name, "example": ex_idx, "value": total, "type": "activation"})
+
+            # Weight attributions (sum over all weights)
+            if step in self.per_weight_attribs:
+                weight_example_attribs = self.per_weight_attribs[step]
+                for ex_idx, w_attribs in enumerate(weight_example_attribs):
+                    if not w_attribs:
+                        continue
+                    weight_total = sum(w.sum().item() for w in w_attribs.values())
+                    records.append({"step": step, "layer": "weights (total)", "example": ex_idx, "value": weight_total, "type": "weight"})
 
         if not records:
             return
@@ -518,10 +528,17 @@ class LCAEvaluator(Evaluator):
         for ex_idx in range(n_examples):
             ax = axes_flat[ex_idx]
             ex_df = df[df["example"] == ex_idx]
+
+            # Plot activation layers
             for layer_name in layer_names:
                 layer_df = ex_df[ex_df["layer"] == layer_name].sort_values("step")
                 if not layer_df.empty:
                     ax.plot(layer_df["step"], layer_df["value"], label=layer_name)
+
+            # Plot weight total (dashed, thicker)
+            weight_df = ex_df[ex_df["layer"] == "weights (total)"].sort_values("step")
+            if not weight_df.empty:
+                ax.plot(weight_df["step"], weight_df["value"], label="weights (total)", linestyle="--", linewidth=2, color="black")
 
             ax.set_xlabel("Step")
             ax.set_ylabel("Total Attribution")
@@ -533,7 +550,7 @@ class LCAEvaluator(Evaluator):
         for ax in axes_flat[n_examples:]:
             ax.set_visible(False)
 
-        fig.suptitle(f"{str(self)} Activation Attributions Over Training", fontsize=14)
+        fig.suptitle(f"{str(self)} Attributions Over Training", fontsize=14)
         fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig.savefig(os.path.join(log_dir, f"{str(self)}.activation_attrib_trajectory.png"), dpi=200)
         plt.close(fig)
