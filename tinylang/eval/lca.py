@@ -372,14 +372,16 @@ class LCAEvaluator(Evaluator):
         if not steps:
             return
 
-        # Get layer names from the first non-empty example
+        # Get layer names and number of examples from the first non-empty step
         layer_names = None
+        n_examples = 0
         for step in steps:
             examples = self.per_activation_attribs[step]
             if examples and examples[0]:
                 layer_names = sorted(examples[0].keys())
+                n_examples = len(examples)
                 break
-        if not layer_names:
+        if not layer_names or n_examples == 0:
             return
 
         # Create subfolder for per-step plots
@@ -387,70 +389,83 @@ class LCAEvaluator(Evaluator):
         os.makedirs(frames_dir, exist_ok=True)
         frame_paths = []
 
-        # Compute global vmax across all steps for consistent colorbar
+        # Compute global vmax across all steps and all examples for consistent colorbar
         global_vmax = 0.0
         for step in steps:
             example_attribs = self.per_activation_attribs[step]
-            if not example_attribs or not example_attribs[0]:
+            if not example_attribs:
                 continue
-            attribs = example_attribs[0]
-            for layer_name in layer_names:
-                if layer_name not in attribs:
+            for ex_idx, attribs in enumerate(example_attribs):
+                if not attribs:
                     continue
-                a = attribs[layer_name]
-                # Squeeze out batch and any singleton dims from d_model summing
-                a = a.squeeze()  # (seq_len,) or (seq_len, 1) -> (seq_len,)
-                if a.dim() > 1:
-                    a = a.squeeze(-1)
-                global_vmax = max(global_vmax, np.abs(a.numpy()).max())
+                for layer_name in layer_names:
+                    if layer_name not in attribs:
+                        continue
+                    a = attribs[layer_name]
+                    a = a.squeeze()
+                    if a.dim() > 1:
+                        a = a.squeeze(-1)
+                    global_vmax = max(global_vmax, np.abs(a.numpy()).max())
 
-        # For each step, plot a heatmap of attribution sums (layers x positions)
+        # For each step, plot a faceted heatmap (one column per example)
         for step in steps:
             example_attribs = self.per_activation_attribs[step]
-            if not example_attribs or not example_attribs[0]:
+            if not example_attribs:
                 continue
 
-            # Use first example
-            attribs = example_attribs[0]
-            example_info = self.examples_by_step.get(step)
-
-            # Build matrix: (n_layers, seq_len) with attribution per position
+            # Determine seq_len from first valid example
             seq_len = None
-            attrib_values = []
-            for layer_name in layer_names:
-                if layer_name not in attribs:
-                    continue
-                a = attribs[layer_name]  # already summed over d_model
-                # Squeeze out batch and any singleton dims
-                a = a.squeeze()
-                if a.dim() > 1:
-                    a = a.squeeze(-1)
-                attrib_values.append(a.numpy())
-                seq_len = a.shape[0]
-
-            if not attrib_values:
+            for attribs in example_attribs:
+                if attribs and layer_names[0] in attribs:
+                    a = attribs[layer_names[0]].squeeze()
+                    if a.dim() > 1:
+                        a = a.squeeze(-1)
+                    seq_len = a.shape[0]
+                    break
+            if seq_len is None:
                 continue
 
-            attrib_matrix = np.stack(attrib_values, axis=0)  # (n_layers, seq_len)
+            # Create figure with one subplot per example
+            fig, axes = plt.subplots(
+                1, n_examples,
+                figsize=(max(6, seq_len * 0.2) * n_examples, len(layer_names) * 0.5 + 2),
+                squeeze=False
+            )
+            axes = axes[0]  # flatten to 1D
 
-            fig, ax = plt.subplots(figsize=(max(12, seq_len * 0.3), len(layer_names) * 0.5 + 2))
-            # Use diverging colormap with global vmax for consistent scale
-            im = ax.imshow(attrib_matrix, aspect="auto", cmap="RdBu_r", vmin=-global_vmax, vmax=global_vmax)
-            ax.set_xlabel("Position")
-            ax.set_ylabel("Layer")
-            ax.set_yticks(range(len(layer_names)))
-            ax.set_yticklabels(layer_names)
+            for ex_idx, (ax, attribs) in enumerate(zip(axes, example_attribs)):
+                if not attribs:
+                    ax.set_visible(False)
+                    continue
 
-            # Add token labels if available
-            if example_info and "tokens" in example_info:
-                tokens = example_info["tokens"]
-                if len(tokens) <= seq_len:
-                    ax.set_xticks(range(len(tokens)))
-                    ax.set_xticklabels(tokens, rotation=90, fontsize=8)
+                # Build matrix: (n_layers, seq_len) with attribution per position
+                attrib_values = []
+                for layer_name in layer_names:
+                    if layer_name not in attribs:
+                        attrib_values.append(np.zeros(seq_len))
+                        continue
+                    a = attribs[layer_name]
+                    a = a.squeeze()
+                    if a.dim() > 1:
+                        a = a.squeeze(-1)
+                    attrib_values.append(a.numpy())
 
-            plt.colorbar(im, ax=ax, label="Attribution (grad × Δact)")
-            ax.set_title(f"{str(self)} Activation Attributions (step {step}, example 0)")
-            fig.tight_layout()
+                attrib_matrix = np.stack(attrib_values, axis=0)
+
+                im = ax.imshow(attrib_matrix, aspect="auto", cmap="RdBu_r", vmin=-global_vmax, vmax=global_vmax)
+                ax.set_xlabel("Position")
+                if ex_idx == 0:
+                    ax.set_ylabel("Layer")
+                    ax.set_yticks(range(len(layer_names)))
+                    ax.set_yticklabels(layer_names)
+                else:
+                    ax.set_yticks([])
+                ax.set_title(f"Example {ex_idx}")
+
+            # Add single colorbar
+            fig.colorbar(im, ax=axes, label="Attribution (grad × Δact)", shrink=0.8)
+            fig.suptitle(f"{str(self)} Activation Attributions (step {step})", fontsize=14)
+            fig.tight_layout(rect=[0, 0, 0.95, 0.95])
 
             frame_path = os.path.join(frames_dir, f"step_{step:06d}.png")
             fig.savefig(frame_path, dpi=150)
@@ -473,34 +488,52 @@ class LCAEvaluator(Evaluator):
             except ImportError:
                 pass  # PIL not available, skip GIF creation
 
-        # Also plot total attribution trajectory over steps
+        # Also plot total attribution trajectory over steps, faceted by example
         records = []
         for step in steps:
             example_attribs = self.per_activation_attribs[step]
-            if not example_attribs or not example_attribs[0]:
+            if not example_attribs:
                 continue
-            attribs = example_attribs[0]
-            for layer_name in layer_names:
-                if layer_name not in attribs:
+            for ex_idx, attribs in enumerate(example_attribs):
+                if not attribs:
                     continue
-                a = attribs[layer_name]
-                total = a.sum().item()
-                records.append({"step": step, "layer": layer_name, "value": total})
+                for layer_name in layer_names:
+                    if layer_name not in attribs:
+                        continue
+                    a = attribs[layer_name]
+                    total = a.sum().item()
+                    records.append({"step": step, "layer": layer_name, "example": ex_idx, "value": total})
 
         if not records:
             return
 
         df = pd.DataFrame(records)
-        fig, ax = plt.subplots(figsize=(10, 6))
-        for layer_name in layer_names:
-            layer_df = df[df["layer"] == layer_name].sort_values("step")
-            ax.plot(layer_df["step"], layer_df["value"], label=layer_name)
 
-        ax.set_xlabel("Step")
-        ax.set_ylabel("Total Attribution")
-        ax.set_title(f"{str(self)} Activation Attributions Over Training")
-        ax.legend(loc="best", fontsize=8)
-        ax.grid(True, linestyle="--", alpha=0.25)
-        fig.tight_layout()
+        # Create faceted plot with one subplot per example
+        ncols = min(4, n_examples)
+        nrows = math.ceil(n_examples / ncols)
+        fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows), squeeze=False)
+        axes_flat = axes.flat
+
+        for ex_idx in range(n_examples):
+            ax = axes_flat[ex_idx]
+            ex_df = df[df["example"] == ex_idx]
+            for layer_name in layer_names:
+                layer_df = ex_df[ex_df["layer"] == layer_name].sort_values("step")
+                if not layer_df.empty:
+                    ax.plot(layer_df["step"], layer_df["value"], label=layer_name)
+
+            ax.set_xlabel("Step")
+            ax.set_ylabel("Total Attribution")
+            ax.set_title(f"Example {ex_idx}")
+            ax.legend(loc="best", fontsize=7)
+            ax.grid(True, linestyle="--", alpha=0.25)
+
+        # Hide unused axes
+        for ax in axes_flat[n_examples:]:
+            ax.set_visible(False)
+
+        fig.suptitle(f"{str(self)} Activation Attributions Over Training", fontsize=14)
+        fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig.savefig(os.path.join(log_dir, f"{str(self)}.activation_attrib_trajectory.png"), dpi=200)
         plt.close(fig)
