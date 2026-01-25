@@ -238,7 +238,9 @@ class Zoology(Model):
         self.model = LanguageModel(self.config)
 
         # set dtype
-        self.model.to(dtype=torch.bfloat16)
+        # delta_net and gated_delta_net require bfloat16
+        if mixer_type in ("delta_net", "gated_delta_net"):
+            self.model.to(dtype=torch.bfloat16)
 
         # to satisfy pyvene
         self.model.config = self.config
