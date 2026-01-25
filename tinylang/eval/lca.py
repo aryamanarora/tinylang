@@ -50,9 +50,14 @@ class LCAEvaluator(Evaluator):
         # Find layers to hook for activation attributions
         layers_to_hook = []
         backbone = getattr(model_module, "backbone", None)
-        if backbone is not None and hasattr(backbone, "layers"):
-            for i, layer in enumerate(backbone.layers):
-                layers_to_hook.append((f"layer_{i}", layer))
+        if backbone is not None:
+            # Hook embeddings (input to layer 0)
+            if hasattr(backbone, "embeddings"):
+                layers_to_hook.append(("embedding", backbone.embeddings))
+            # Hook each transformer/mamba layer
+            if hasattr(backbone, "layers"):
+                for i, layer in enumerate(backbone.layers):
+                    layers_to_hook.append((f"layer_{i}", layer))
 
         # Keep track of current activations for next step's delta (like weights)
         prev_activations = self.last_step_activations
