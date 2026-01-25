@@ -9,6 +9,7 @@ import os
 import math
 import matplotlib.pyplot as plt
 from labellines import labelLines
+from tqdm import tqdm
 
 
 class LCAEvaluator(Evaluator):
@@ -27,7 +28,7 @@ class LCAEvaluator(Evaluator):
 
         # Keep CPU copies of current and previous weights to compare across steps.
         prev_weights = self.last_step_weights
-        current_weights = {k: v.detach().cpu().clone() for k, v in model_module.state_dict().items()}
+        current_weights = {k: v.detach().clone() for k, v in model_module.state_dict().items()}
         self.last_step_weights = current_weights
 
         # Need a previous snapshot to form weight deltas.
@@ -36,13 +37,14 @@ class LCAEvaluator(Evaluator):
 
         weight_deltas = {k: current_weights[k] - prev_weights[k] for k in current_weights if k in prev_weights}
         device = next(model_module.parameters()).device
+        prev_step = max(list(self.per_weight_attribs.keys()) or [None])
         self.per_weight_attribs[step] = []
 
         # Track a readable example for logging later.
         self.examples_by_step[step] = self._format_example(language, inputs)
 
         # No batching: run backward one example at a time.
-        for idx in range(inputs["input_ids"].size(0)):
+        for idx in tqdm(range(inputs["input_ids"].size(0)), desc=f"Running backward passes for step {step}"):
             model_module.zero_grad(set_to_none=True)
             with torch.enable_grad():
                 input_ids = inputs["input_ids"][idx : idx + 1].to(device)
@@ -54,8 +56,14 @@ class LCAEvaluator(Evaluator):
             for name, param in model_module.named_parameters():
                 if param.grad is None or name not in weight_deltas:
                     continue
-                grad_cpu = param.grad.detach().cpu()
-                example_attribs[name] = weight_deltas[name] * grad_cpu
+                grad_detach = param.grad.detach()
+                example_attribs[name] = (weight_deltas[name] * grad_detach) # .sum()
+                if len(example_attribs[name].shape) > 1:
+                    for dim in range(example_attribs[name].dim()):
+                        if example_attribs[name].shape[dim] == model.config.d_model:
+                            example_attribs[name] = example_attribs[name].sum(dim=dim, keepdim=True)
+                if prev_step is not None:
+                    example_attribs[name] += self.per_weight_attribs[prev_step][idx].get(name, 0)
             self.per_weight_attribs[step].append(example_attribs)
 
     def _format_example(self, language: Language, inputs: dict) -> dict:
@@ -142,8 +150,10 @@ class LCAEvaluator(Evaluator):
         if df_top.empty:
             return
 
+        last_step = df["step"].max()
         module_order = (
-            df.groupby("module")["value"]
+            df[df["step"] == last_step]
+            .groupby("module")["value"]
             .sum()
             .abs()
             .sort_values(ascending=False)
@@ -203,6 +213,8 @@ class LCAEvaluator(Evaluator):
                 weight_df = weight_df.sort_values("step")
                 color = color_lookup.get(weight, "black")
                 is_top = weight in color_lookup
+                # Strip module prefix from label since it's in the subplot title
+                short_label = weight[len(module):] if weight.startswith(module) else weight
                 line, = ax.plot(
                     weight_df["step"],
                     weight_df["value"],
@@ -210,7 +222,7 @@ class LCAEvaluator(Evaluator):
                     linewidth=1.6 if is_top else 0.8,
                     alpha=1.0 if is_top else 0.35,
                     zorder=3 if is_top else 1,
-                    label=weight if is_top else "_nolegend_",
+                    label=short_label if is_top else "_nolegend_",
                 )
                 if is_top:
                     top_lines.append(line)

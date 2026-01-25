@@ -167,9 +167,9 @@ class InterchangeEvaluator(Evaluator):
                             t = probing_schemas[batch_idx]["type"]
                             pos_to_check = probing_schemas[batch_idx]["queries"]["target_item"]["pos"] - 1
                             orig_output = inputs["input_ids"][batch_idx][pos_to_check + 1]
-                            intervened_logits = intervened_outputs[batch_idx].cpu()
-                            original_logits = outputs["logits"][batch_idx].cpu()
-                            corrupted_logits = corrupted_outputs[batch_idx].cpu()
+                            intervened_logits = intervened_outputs[batch_idx].detach().cpu()
+                            original_logits = outputs["logits"][batch_idx].detach().cpu()
+                            corrupted_logits = corrupted_outputs[batch_idx].detach().cpu()
 
                             intervened_logit = intervened_logits.squeeze(0)[pos_to_check]
                             corrupted_logit = corrupted_logits.squeeze(0)[pos_to_check]

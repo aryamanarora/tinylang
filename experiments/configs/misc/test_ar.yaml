@@ -1,3 +1,13 @@
+# model:
+#   class: Zoology
+#   config:
+#     bias: false
+#     mixer_type: attention
+#     n_embd: 128
+#     n_head: 4
+#     n_layer: 4
+#     n_positions: 1024
+#     state_mixer_type: mlp
 model:
   class: "GPT2"
   config:
@@ -17,10 +27,11 @@ language:
 evaluators:
   - class: "SummaryEvaluator"
     config:
-      run_every_n_steps: 200
+      run_every_n_steps: 100
   - class: "LCAEvaluator"
     config:
-      run_every_n_steps: 200
+      run_every_n_steps: 100
+      cumulative: false
   # - class: "AttentionEvaluator"
   #   config:
   #     run_every_n_steps: 200
@@ -34,7 +45,7 @@ evaluators:
   #     run_every_n_steps: 200
 training:
   train_batch_size: 16
-  num_train_steps: 5000
-  eval_batch_size: 16
+  num_train_steps: 5000 #0000
+  eval_batch_size: 1
   num_eval_steps: 1
   lr: 1e-4

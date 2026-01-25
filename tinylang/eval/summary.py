@@ -13,7 +13,7 @@ class SummaryEvaluator(Evaluator):
         super().__init__(run_every_n_steps)
 
     def eval(self, model: Model, language: Language, inputs: dict, outputs: dict, step: int):
-        loss, logits = outputs["loss"], outputs["logits"]
+        loss, logits = outputs["loss"], outputs["logits"].detach()
         self.all_eval_stats[step]["loss"] = loss.item()
 
         # compute kl divs
@@ -40,6 +40,7 @@ class SummaryEvaluator(Evaluator):
 
     
     def post_eval(self, step: int):
+        print("="*100)
+        print(f"Step {step}")
         for key in self.all_eval_stats[step]:
-            if "pred_prob" in key:
-                print(f"{key:>40}: {np.mean(self.all_eval_stats[step][key]):.5%}")
+            print(f"{key:>40}: {np.mean(self.all_eval_stats[step][key]):.5%}")
