@@ -93,13 +93,17 @@ class LCAEvaluator(Evaluator):
             # Store current activations for next step's delta
             current_activations[idx] = activations
 
-            # Compute activation attributions: grad * delta
+            # Compute activation attributions: grad * delta (cumulative)
             activation_attribs = {}
             if prev_activations is not None and idx in prev_activations:
                 for name in activations:
                     if name in activation_grads and name in prev_activations[idx]:
                         delta = activations[name] - prev_activations[idx][name]
                         activation_attribs[name] = activation_grads[name] * delta
+                        # Accumulate from previous step
+                        if prev_step is not None and self.per_activation_attribs[prev_step]:
+                            prev_attrib = self.per_activation_attribs[prev_step][idx].get(name, 0)
+                            activation_attribs[name] = activation_attribs[name] + prev_attrib
             self.per_activation_attribs[step].append(activation_attribs)
 
             # Compute weight attributions: grad * delta_weight
@@ -326,6 +330,27 @@ class LCAEvaluator(Evaluator):
         if not layer_names:
             return
 
+        # Create subfolder for per-step plots
+        frames_dir = os.path.join(log_dir, f"{str(self)}_activation_frames")
+        os.makedirs(frames_dir, exist_ok=True)
+        frame_paths = []
+
+        # Compute global vmax across all steps for consistent colorbar
+        global_vmax = 0.0
+        for step in steps:
+            example_attribs = self.per_activation_attribs[step]
+            if not example_attribs or not example_attribs[0]:
+                continue
+            attribs = example_attribs[0]
+            for layer_name in layer_names:
+                if layer_name not in attribs:
+                    continue
+                a = attribs[layer_name]
+                if a.dim() == 3:
+                    a = a.squeeze(0)
+                pos_attrib = a.sum(dim=-1)
+                global_vmax = max(global_vmax, np.abs(pos_attrib.numpy()).max())
+
         # For each step, plot a heatmap of attribution sums (layers x positions)
         for step in steps:
             example_attribs = self.per_activation_attribs[step]
@@ -356,9 +381,8 @@ class LCAEvaluator(Evaluator):
             attrib_matrix = np.stack(attrib_sums, axis=0)  # (n_layers, seq_len)
 
             fig, ax = plt.subplots(figsize=(max(12, seq_len * 0.3), len(layer_names) * 0.5 + 2))
-            # Use diverging colormap since attributions can be positive or negative
-            vmax = np.abs(attrib_matrix).max()
-            im = ax.imshow(attrib_matrix, aspect="auto", cmap="RdBu_r", vmin=-vmax, vmax=vmax)
+            # Use diverging colormap with global vmax for consistent scale
+            im = ax.imshow(attrib_matrix, aspect="auto", cmap="RdBu_r", vmin=-global_vmax, vmax=global_vmax)
             ax.set_xlabel("Position")
             ax.set_ylabel("Layer")
             ax.set_yticks(range(len(layer_names)))
@@ -375,9 +399,26 @@ class LCAEvaluator(Evaluator):
             ax.set_title(f"{str(self)} Activation Attributions (step {step}, example 0)")
             fig.tight_layout()
 
-            os.makedirs(log_dir, exist_ok=True)
-            fig.savefig(os.path.join(log_dir, f"{str(self)}.activation_attribs_step{step}.png"), dpi=200)
+            frame_path = os.path.join(frames_dir, f"step_{step:06d}.png")
+            fig.savefig(frame_path, dpi=150)
+            frame_paths.append(frame_path)
             plt.close(fig)
+
+        # Create GIF from frames
+        if frame_paths:
+            try:
+                from PIL import Image
+                frames = [Image.open(fp) for fp in frame_paths]
+                gif_path = os.path.join(log_dir, f"{str(self)}.activation_attribs.gif")
+                frames[0].save(
+                    gif_path,
+                    save_all=True,
+                    append_images=frames[1:],
+                    duration=500,  # ms per frame
+                    loop=0,
+                )
+            except ImportError:
+                pass  # PIL not available, skip GIF creation
 
         # Also plot total attribution trajectory over steps
         records = []
