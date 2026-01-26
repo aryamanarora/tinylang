@@ -24,6 +24,7 @@ class LCAEvaluator(Evaluator):
         self.last_step_activations = None  # {example_idx: {layer_name: (seq_len, d_model)}}
         self.per_weight_attribs = defaultdict(list)
         self.per_activation_attribs = defaultdict(list)  # step -> list of {layer_name: grad * delta}
+        self.losses_by_step = defaultdict(list)  # step -> list of loss values per example
         self.examples_by_step = {}
 
     def eval(self, model: Model, language: Language, inputs: dict, outputs: dict, step: int):
@@ -37,6 +38,14 @@ class LCAEvaluator(Evaluator):
 
         # Need a previous snapshot to form weight deltas.
         if prev_weights is None:
+            # Still compute and store initial losses for baseline
+            device = next(model_module.parameters()).device
+            for idx in range(inputs["input_ids"].size(0)):
+                input_ids = inputs["input_ids"][idx : idx + 1].to(device)
+                labels = inputs["labels"][idx : idx + 1].to(device)
+                with torch.no_grad():
+                    loss = model.step(input_ids, labels)["loss"].item()
+                self.losses_by_step[step].append(loss)
             return
 
         weight_deltas = {k: current_weights[k] - prev_weights[k] for k in current_weights if k in prev_weights}
@@ -137,6 +146,11 @@ class LCAEvaluator(Evaluator):
 
             # Restore current weights
             model_module.load_state_dict({k: v.to(device) for k, v in current_weights.items()})
+
+            # Compute and store loss at current weights
+            with torch.no_grad():
+                loss_at_current = model.step(input_ids, labels)["loss"].item()
+            self.losses_by_step[step].append(loss_at_current)
 
             # Store final activations (at alpha=1) for next eval step's delta
             # prev_interp_activations now holds the final activations after the loop
@@ -490,6 +504,15 @@ class LCAEvaluator(Evaluator):
 
         # Also plot total attribution trajectory over steps, faceted by example
         records = []
+
+        # Get baseline losses from first step
+        all_loss_steps = sorted(self.losses_by_step.keys())
+        baseline_losses = {}
+        if all_loss_steps:
+            first_loss_step = all_loss_steps[0]
+            for ex_idx, loss in enumerate(self.losses_by_step[first_loss_step]):
+                baseline_losses[ex_idx] = loss
+
         for step in steps:
             # Activation attributions per layer
             example_attribs = self.per_activation_attribs[step]
@@ -513,6 +536,13 @@ class LCAEvaluator(Evaluator):
                         continue
                     weight_total = sum(w.sum().item() for w in w_attribs.values())
                     records.append({"step": step, "layer": "weights (total)", "example": ex_idx, "value": weight_total, "type": "weight"})
+
+            # Loss difference from step 0
+            if step in self.losses_by_step:
+                for ex_idx, loss in enumerate(self.losses_by_step[step]):
+                    if ex_idx in baseline_losses:
+                        loss_diff = loss - baseline_losses[ex_idx]
+                        records.append({"step": step, "layer": "Δloss (actual)", "example": ex_idx, "value": loss_diff, "type": "loss"})
 
         if not records:
             return
@@ -540,8 +570,13 @@ class LCAEvaluator(Evaluator):
             if not weight_df.empty:
                 ax.plot(weight_df["step"], weight_df["value"], label="weights (total)", linestyle="--", linewidth=2, color="black")
 
+            # Plot actual loss difference (dotted, red)
+            loss_df = ex_df[ex_df["layer"] == "Δloss (actual)"].sort_values("step")
+            if not loss_df.empty:
+                ax.plot(loss_df["step"], loss_df["value"], label="Δloss (actual)", linestyle=":", linewidth=2, color="red")
+
             ax.set_xlabel("Step")
-            ax.set_ylabel("Total Attribution")
+            ax.set_ylabel("Total Attribution / Δloss")
             ax.set_title(f"Example {ex_idx}")
             ax.legend(loc="best", fontsize=7)
             ax.grid(True, linestyle="--", alpha=0.25)
@@ -550,7 +585,7 @@ class LCAEvaluator(Evaluator):
         for ax in axes_flat[n_examples:]:
             ax.set_visible(False)
 
-        fig.suptitle(f"{str(self)} Attributions Over Training", fontsize=14)
+        fig.suptitle(f"{str(self)} Attributions vs Actual Loss Change", fontsize=14)
         fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig.savefig(os.path.join(log_dir, f"{str(self)}.activation_attrib_trajectory.png"), dpi=200)
         plt.close(fig)
