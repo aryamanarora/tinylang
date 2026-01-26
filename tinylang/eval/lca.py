@@ -57,16 +57,25 @@ class LCAEvaluator(Evaluator):
         self.examples_by_step[step] = self._format_example(language, inputs)
 
         # Find layers to hook for activation attributions
+        # Each entry is (name, module, capture_input) where capture_input indicates if we want input instead of output
         layers_to_hook = []
         backbone = getattr(model_module, "backbone", None)
         if backbone is not None:
             # Hook embeddings (input to layer 0)
             if hasattr(backbone, "embeddings"):
-                layers_to_hook.append(("embedding", backbone.embeddings))
-            # Hook each transformer/mamba layer
+                layers_to_hook.append(("embedding", backbone.embeddings, False))
+            # Hook each transformer/mamba layer and its submodules
             if hasattr(backbone, "layers"):
                 for i, layer in enumerate(backbone.layers):
-                    layers_to_hook.append((f"layer_{i}", layer))
+                    layers_to_hook.append((f"layer_{i}", layer, False))
+                    # Hook sequence_mixer input and output
+                    if hasattr(layer, "sequence_mixer"):
+                        layers_to_hook.append((f"layer_{i}.seq_mix_in", layer.sequence_mixer, True))
+                        layers_to_hook.append((f"layer_{i}.seq_mix_out", layer.sequence_mixer, False))
+                    # Hook state_mixer input and output
+                    if hasattr(layer, "state_mixer"):
+                        layers_to_hook.append((f"layer_{i}.state_mix_in", layer.state_mixer, True))
+                        layers_to_hook.append((f"layer_{i}.state_mix_out", layer.state_mixer, False))
 
         # Keep track of current activations for next step's delta (like weights)
         prev_activations = self.last_step_activations
@@ -105,19 +114,34 @@ class LCAEvaluator(Evaluator):
                 activation_grads = {}
                 handles = []
 
-                def make_fwd_hook(name):
-                    def hook(module, input, output):
-                        activations[name] = output.detach().cpu()
+                def make_fwd_hook(name, capture_input):
+                    def hook(module, inp, output):
+                        if capture_input:
+                            # inp is a tuple, take first element
+                            activations[name] = inp[0].detach().cpu() if isinstance(inp, tuple) else inp.detach().cpu()
+                        else:
+                            # output might be a tuple (e.g., for some layers)
+                            out = output[0] if isinstance(output, tuple) else output
+                            activations[name] = out.detach().cpu()
                     return hook
 
-                def make_bwd_hook(name):
+                def make_bwd_hook(name, capture_input):
                     def hook(module, grad_input, grad_output):
-                        activation_grads[name] = grad_output[0].detach().cpu()
+                        if capture_input:
+                            # grad_input corresponds to input gradients
+                            gi = grad_input[0] if isinstance(grad_input, tuple) and grad_input[0] is not None else grad_input
+                            if gi is not None:
+                                activation_grads[name] = gi.detach().cpu()
+                        else:
+                            # grad_output corresponds to output gradients
+                            go = grad_output[0] if isinstance(grad_output, tuple) else grad_output
+                            if go is not None:
+                                activation_grads[name] = go.detach().cpu()
                     return hook
 
-                for name, layer in layers_to_hook:
-                    handles.append(layer.register_forward_hook(make_fwd_hook(name)))
-                    handles.append(layer.register_full_backward_hook(make_bwd_hook(name)))
+                for name, layer, capture_input in layers_to_hook:
+                    handles.append(layer.register_forward_hook(make_fwd_hook(name, capture_input)))
+                    handles.append(layer.register_full_backward_hook(make_bwd_hook(name, capture_input)))
 
                 with torch.enable_grad():
                     loss = model.step(input_ids, labels)["loss"]
