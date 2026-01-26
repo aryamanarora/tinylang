@@ -190,20 +190,23 @@ class LCAEvaluator(Evaluator):
         # Save activations for next step (like last_step_weights)
         self.last_step_activations = current_activations
 
-    def _format_example(self, language: Language, inputs: dict) -> dict:
-        """Return both raw token ids and pretty text for example 0 if possible."""
-        tokens = inputs["input_ids"][0].detach().cpu().tolist()
+    def _format_example(self, language: Language, inputs: dict) -> list[dict]:
+        """Return both raw token ids and pretty text for all examples."""
+        results = []
         pad_token = getattr(language, "PAD", None)
-        if pad_token is not None:
-            while tokens and tokens[-1] == pad_token:
-                tokens.pop()
-        if "strs" in inputs and inputs["strs"]:
-            pretty = inputs["strs"][0]
-        elif hasattr(language, "prettify"):
-            pretty = language.prettify(tokens)
-        else:
-            pretty = " ".join(str(tok) for tok in tokens)
-        return {"pretty": pretty, "tokens": tokens}
+        for ex_idx in range(inputs["input_ids"].size(0)):
+            tokens = inputs["input_ids"][ex_idx].detach().cpu().tolist()
+            if pad_token is not None:
+                while tokens and tokens[-1] == pad_token:
+                    tokens.pop()
+            if "strs" in inputs and inputs["strs"] and ex_idx < len(inputs["strs"]):
+                pretty = inputs["strs"][ex_idx]
+            elif hasattr(language, "prettify"):
+                pretty = language.prettify(tokens)
+            else:
+                pretty = " ".join(str(tok) for tok in tokens)
+            results.append({"pretty": pretty, "tokens": tokens})
+        return results
 
     def plot(self, log_dir: str):
         """Plot attribution trajectories for the first example only."""
@@ -212,10 +215,10 @@ class LCAEvaluator(Evaluator):
             if not example_list:
                 continue
             first_example = example_list[0]
-            example_info = self.examples_by_step.get(step)
-            if example_info is not None:
-                print(f"{str(self)} step {step} example 0 pretty: {example_info['pretty']}")
-                print(f"{str(self)} step {step} example 0 tokens: {example_info['tokens']}")
+            example_info_list = self.examples_by_step.get(step, [])
+            if example_info_list:
+                print(f"{str(self)} step {step} example 0 pretty: {example_info_list[0]['pretty']}")
+                print(f"{str(self)} step {step} example 0 tokens: {example_info_list[0]['tokens']}")
             for name, attrib in first_example.items():
                 # if "wte" in name:
                 #     continue
@@ -447,6 +450,9 @@ class LCAEvaluator(Evaluator):
             )
             axes = axes[0]  # flatten to 1D
 
+            # Get example info for token labels
+            example_info = self.examples_by_step.get(step, [])
+
             for ex_idx, (ax, attribs) in enumerate(zip(axes, example_attribs)):
                 if not attribs:
                     ax.set_visible(False)
@@ -474,6 +480,14 @@ class LCAEvaluator(Evaluator):
                     ax.set_yticklabels(layer_names)
                 else:
                     ax.set_yticks([])
+
+                # Add token labels on x-axis for this example
+                if ex_idx < len(example_info) and "tokens" in example_info[ex_idx]:
+                    tokens = example_info[ex_idx]["tokens"]
+                    if len(tokens) <= seq_len:
+                        ax.set_xticks(range(len(tokens)))
+                        ax.set_xticklabels(tokens, rotation=90, fontsize=6)
+
                 ax.set_title(f"Example {ex_idx}")
 
             # Add single colorbar
