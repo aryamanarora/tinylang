@@ -244,6 +244,34 @@ class LCAEvaluator(Evaluator):
             results.append({"pretty": pretty, "tokens": tokens})
         return results
 
+    def _sort_layer_names(self, names: list[str]) -> list[str]:
+        """Sort layer names in model forward-pass order."""
+        def sort_key(name):
+            # embedding comes first
+            if name == "embedding":
+                return (-1, 0, 0)
+            # Parse layer_N or layer_N.suffix
+            parts = name.split(".")
+            if parts[0].startswith("layer_"):
+                layer_num = int(parts[0].split("_")[1])
+                if len(parts) == 1:
+                    # layer_N (block output) - comes first for this layer
+                    return (layer_num, 0, 0)
+                else:
+                    # layer_N.suffix - order by suffix type
+                    suffix_order = {
+                        "seq_mix_in": 1,
+                        "seq_mix_out": 2,
+                        "state_mix_in": 3,
+                        "state_mix_out": 4,
+                    }
+                    suffix = parts[1]
+                    return (layer_num, 1, suffix_order.get(suffix, 99))
+            # Unknown format - put at end
+            return (9999, 0, 0)
+
+        return sorted(names, key=sort_key)
+
     def plot(self, log_dir: str):
         """Plot attribution trajectories for the first example only."""
         records = []
@@ -431,7 +459,7 @@ class LCAEvaluator(Evaluator):
         for step in steps:
             examples = self.per_activation_attribs[step]
             if examples and examples[0]:
-                layer_names = sorted(examples[0].keys())
+                layer_names = self._sort_layer_names(list(examples[0].keys()))
                 n_examples = len(examples)
                 break
         if not layer_names or n_examples == 0:
