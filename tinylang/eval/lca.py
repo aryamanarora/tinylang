@@ -211,6 +211,18 @@ class LCAEvaluator(Evaluator):
                     example_weight_attribs[name] = example_weight_attribs[name] + self.per_weight_attribs[prev_step][idx].get(name, 0)
             self.per_weight_attribs[step].append(example_weight_attribs)
 
+            # Log trajectory stats to all_eval_stats for this example
+            # Activation attribution sums per layer
+            for name, attrib in example_activation_attribs.items():
+                self.all_eval_stats[step][f"act_attrib.{name}"].append(attrib.sum().item())
+
+            # Total weight attribution sum
+            weight_total = sum(w.sum().item() for w in example_weight_attribs.values())
+            self.all_eval_stats[step]["weight_attrib.total"].append(weight_total)
+
+            # Loss at current step
+            self.all_eval_stats[step]["loss"].append(self.losses_by_step[step][idx])
+
         # Save activations for next step (like last_step_weights)
         self.last_step_activations = current_activations
 
