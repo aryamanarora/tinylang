@@ -10,7 +10,10 @@ from zoology.model import ModelConfig, StochasticDepth, TokenEmbeddings, _init_w
 from functools import partial
 
 from zoology.mixers.mamba_ssm.triton.layernorm import RMSNorm
-from mamba_ssm.modules.mamba_simple import Mamba
+try:
+    from mamba_ssm.modules.mamba_simple import Mamba
+except ImportError:
+    Mamba = None
 import torch
 from typing import Optional
 
