@@ -4,11 +4,9 @@ import numpy as np
 from enum import IntEnum
 import torch
 import termcolor
-from tqdm import tqdm
 
 
 COLORS = ["red", "green", "blue", "yellow", "magenta", "cyan", "light_red", "light_green", "light_blue", "light_yellow", "light_magenta", "light_cyan"]
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_RECURSION_DEPTH = 20
 MAX_LENGTH = 1024
 
@@ -43,9 +41,6 @@ class PCFG(Language):
         terminal_occurrence_factor: float | None=None, # how much to count all the terminals as
     ):
         super().__init__()
-        self.PAD = 0
-        self.BOS = 1
-        self.EOS = 2
         self.TERMINAL_START = 3
         self.QUERY_START = self.TERMINAL_START + num_terminals
         if transparent_nonterminals:
@@ -161,40 +156,7 @@ class PCFG(Language):
         
         # finally, the start symbol has a distribution over nonterminals as its head
         self.start_probs = np.ones(num_nonterminals) / num_nonterminals
-    
 
-    def prepare_sets(self, train_set_size: int, eval_set_size: int):
-        """Prepare the train and eval sets."""
-        # train set?
-        if self.prepare_train_set:
-            self.train_set = defaultdict(list)
-            for _ in tqdm(range(train_set_size), desc="Preparing train set"):
-                tok, probing_schema = self.sample(split="train", return_stats=False)
-                self.train_set["toks"].append(tok)
-                self.train_set["probing_schemas"].append(probing_schema)
-
-        # we keep separate dev and test sets, unless theres no train/test split
-        self.evalsets = {"dev": {}, "test": {}}
-        if len(self.prohibited_pairs) == 0:
-            del self.evalsets["dev"]
-        self.stats = {}
-
-        # generate eval sets
-        for split in self.evalsets.keys():
-            self.evalsets[split]["toks"], self.evalsets[split]["probing_schemas"] = [], []
-            self.stats[split] = defaultdict(list)
-            for _ in range(eval_set_size):
-                tok, probing_schema, stats = self.sample(split=split, return_stats=True)
-                self.evalsets[split]["toks"].append(tok)
-                self.evalsets[split]["probing_schemas"].append(probing_schema)
-                for key in stats.keys():
-                    self.stats[split][key].append(stats[key])
-            
-            # log means to config dict
-            for key, value in self.stats[split].items():
-                self.config_dict[f"summary/{split}/{key}"] = np.mean(value).item()
-
-    
     def prettify(self, toks: list[int], probing_schema: dict | None = None) -> str:
         """Prettify a tokenized sentence."""
         if probing_schema is None:
@@ -523,58 +485,8 @@ class PCFG(Language):
             return tokens, probing_schema, stats
         return tokens, probing_schema
     
-    def batchify(self, toks: list[list], probing_schemas: list[dict], verbose: bool=False) -> dict:
-        tokens = [torch.tensor(tok) for tok in toks]
-        strs = [self.prettify(tok) for tok in toks]
-
-        # pad with self.PAD to max sequence length and stack with numpy
-        # this is probably inefficient af
-        # labels replace PAD with -100
-        tokens_padded = torch.nn.utils.rnn.pad_sequence(tokens, batch_first=True, padding_value=self.PAD).to(DEVICE)
-        labels = tokens_padded.clone().to(DEVICE)
-        labels[labels == self.PAD] = -100
-
-        if self.mask_nonquery:
-            for i in range(len(tokens)):
-                target_token = probing_schemas[i]["queries"]["target_item"]["pos"]
-                # mask all except query token
-                labels[i, :target_token] = -100
-                labels[i, target_token + 1:] = -100
-
-        ret = {
-            "input_ids": tokens_padded,
-            "labels": labels,
-            "strs": strs,
-            "probing_schemas": probing_schemas,
-        }
+    def _batchify_extras(self, ret: dict, tokens: list, probing_schemas: list[dict], verbose: bool) -> dict:
+        """Add strs_pretty when verbose."""
         if verbose:
             ret["strs_pretty"] = [self.prettify(toks, probing_schema) for toks, probing_schema in zip(tokens, probing_schemas)]
         return ret
-
-    
-    def get_train_step(self, step: int, batch_size: int, verbose: bool = False) -> dict:
-        if self.prepare_train_set:
-            batch_start, batch_end = step * batch_size, min(len(self.train_set["toks"]), (step + 1) * batch_size)
-            return self.batchify(
-                self.train_set["toks"][batch_start:batch_end],
-                self.train_set["probing_schemas"][batch_start:batch_end],
-                verbose=verbose,
-            )
-        else:
-            toks, probing_schemas = [], []
-            for _ in range(batch_size):
-                tok, probing_schema = self.sample(split="train")
-                toks.append(tok)
-                probing_schemas.append(probing_schema)
-
-            return self.batchify(toks, probing_schemas, verbose=verbose)
-
-
-    def get_eval_step(self, step: int, batch_size: int, split: str="test") -> dict:
-        """Get an eval step."""
-        batch_start, batch_end = step * batch_size, min(len(self.evalsets[split]["toks"]), (step + 1) * batch_size)
-        return self.batchify(
-            self.evalsets[split]["toks"][batch_start:batch_end],
-            self.evalsets[split]["probing_schemas"][batch_start:batch_end],
-            verbose=True,
-        )

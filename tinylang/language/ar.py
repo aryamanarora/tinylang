@@ -1,12 +1,6 @@
 from .language import Language
 import random
 import numpy as np
-import torch
-from collections import defaultdict
-from tqdm import tqdm
-
-
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class AR(Language):
@@ -29,9 +23,6 @@ class AR(Language):
         self.query_type = query_type
         self.mask_nonquery = mask_nonquery
 
-        self.PAD = 0
-        self.BOS = 1
-        self.EOS = 2
         self.KEY_START = 3
         self.VALUE_START = 3 + num_kv // 2
         self.keys = [f"k{i}" for i in range(num_kv // 2)]
@@ -152,27 +143,3 @@ class AR(Language):
     
     def prettify(self, toks: list[int]) -> str:
         return " ".join([self.id_to_token[int(tok)] for tok in toks])
-    
-    def batchify(self, toks: list[list], probing_schemas: list[dict], verbose: bool=False) -> dict:
-        tokens = [torch.tensor(tok) for tok in toks]
-        strs = [self.prettify(tok) for tok in toks]
-
-        # labels replace PAD with -100
-        tokens_padded = torch.nn.utils.rnn.pad_sequence(tokens, batch_first=True, padding_value=self.PAD).to(DEVICE)
-        labels = tokens_padded.clone().to(DEVICE)
-        labels[labels == self.PAD] = -100
-        
-        if self.mask_nonquery:
-            for i in range(len(tokens)):
-                target_token = probing_schemas[i]["queries"]["target_item"]["pos"]
-                # mask all except query token
-                labels[i, :target_token] = -100
-                labels[i, target_token + 1:] = -100
-
-        ret = {
-            "input_ids": tokens_padded,
-            "labels": labels,
-            "strs": strs,
-            "probing_schemas": probing_schemas,
-        }
-        return ret
