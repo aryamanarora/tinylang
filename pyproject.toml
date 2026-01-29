@@ -52,4 +52,4 @@ tinylang = "tinylang.main:main"
 
 [tool.uv]
 no-build-isolation-package = ["zoology", "causal-conv1d", "mamba-ssm"]
-no-binary = ["mamba-ssm", "causal-conv1d"]
+no-binary-package = ["mamba-ssm", "causal-conv1d"]
