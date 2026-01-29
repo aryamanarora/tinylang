@@ -46,6 +46,12 @@ packages = ["tinylang"]
 [tool.uv.sources]
 pyvene = { git = "https://github.com/stanfordnlp/pyvene.git" }
 zoology = { git = "https://github.com/aryamanarora/zoology.git" }
+torch = [
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchvision = [
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
 
 [project.scripts]
 tinylang = "tinylang.main:main"
@@ -53,3 +59,8 @@ tinylang = "tinylang.main:main"
 [tool.uv]
 no-build-isolation-package = ["zoology", "causal-conv1d", "mamba-ssm"]
 no-binary-package = ["mamba-ssm", "causal-conv1d"]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
