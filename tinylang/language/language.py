@@ -4,8 +4,18 @@ import pickle
 from collections import defaultdict
 from tqdm import tqdm
 import numpy as np
+import torch
+
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 class Language(ABC):
+    # Default special token IDs (subclasses can override)
+    PAD = 0
+    BOS = 1
+    EOS = 2
+
     def __init__(self):
         self.config_dict = {}
         return
@@ -84,6 +94,37 @@ class Language(ABC):
             self.evalsets[split]["probing_schemas"][batch_start:batch_end],
             verbose=True,
         )
+
+
+    def batchify(self, toks: list[list], probing_schemas: list[dict], verbose: bool = False) -> dict:
+        """Convert a list of token sequences into a batched dict for training/eval."""
+        tokens = [torch.tensor(tok) for tok in toks]
+        strs = [self.prettify(tok) for tok in toks]
+
+        # pad sequences and create labels (replace PAD with -100)
+        tokens_padded = torch.nn.utils.rnn.pad_sequence(
+            tokens, batch_first=True, padding_value=self.PAD
+        ).to(DEVICE)
+        labels = tokens_padded.clone().to(DEVICE)
+        labels[labels == self.PAD] = -100
+
+        if self.mask_nonquery:
+            for i in range(len(tokens)):
+                target_token = probing_schemas[i]["queries"]["target_item"]["pos"]
+                labels[i, :target_token] = -100
+                labels[i, target_token + 1:] = -100
+
+        ret = {
+            "input_ids": tokens_padded,
+            "labels": labels,
+            "strs": strs,
+            "probing_schemas": probing_schemas,
+        }
+        return self._batchify_extras(ret, tokens, probing_schemas, verbose)
+
+    def _batchify_extras(self, ret: dict, tokens: list, probing_schemas: list[dict], verbose: bool) -> dict:
+        """Hook for subclasses to add extra fields to batchify output."""
+        return ret
 
 
     def save(self, path: str):
