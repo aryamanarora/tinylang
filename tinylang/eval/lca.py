@@ -9,7 +9,12 @@ import pandas as pd
 import os
 import math
 import matplotlib.pyplot as plt
-from labellines import labelLines
+from plotnine import (
+    ggplot, aes, geom_line, geom_text, facet_wrap,
+    scale_color_brewer, theme_minimal, theme, element_text,
+    labs, ggsave, scale_linetype_manual
+)
+import warnings
 from tqdm import tqdm
 
 
@@ -354,92 +359,70 @@ class LCAEvaluator(Evaluator):
         if not module_order:
             return
 
-        highlight_weights_order = []
-        for module in module_order:
-            for weight in module_top_weights.get(module, []):
-                if weight not in highlight_weights_order:
-                    highlight_weights_order.append(weight)
+        # Collect highlighted weights across all modules
+        highlight_weights_set = set()
+        for weights in module_top_weights.values():
+            highlight_weights_set.update(weights)
 
-        color_lookup = {}
-        if highlight_weights_order:
-            cmap = plt.get_cmap("tab20", len(highlight_weights_order))
-            for idx, weight in enumerate(highlight_weights_order):
-                color_lookup[weight] = cmap(idx)
+        # Mark highlighted weights in dataframe
+        df_top["is_highlight"] = df_top["weight"].isin(highlight_weights_set)
 
-        y_min_global = df_top["value"].min()
-        y_max_global = df_top["value"].max()
-        if y_min_global == y_max_global:
-            y_min_global -= 1.0
-            y_max_global += 1.0
-        else:
-            padding = 0.05 * (y_max_global - y_min_global)
-            y_min_global -= padding
-            y_max_global += padding
+        # Create short labels (strip module prefix)
+        df_top["short_label"] = df_top.apply(
+            lambda row: row["weight"][len(row["module"]):] if row["weight"].startswith(row["module"]) else row["weight"],
+            axis=1
+        )
 
+        # Get labels for endpoints (last step, highlighted only)
+        last_step = df_top["step"].max()
+        df_labels = df_top[(df_top["step"] == last_step) & df_top["is_highlight"]].copy()
+
+        # Build plot with plotnine
         n_modules = len(module_order)
         ncols = min(4, n_modules)
         nrows = math.ceil(n_modules / ncols)
-        fig, axes = plt.subplots(
-            nrows,
-            ncols,
-            figsize=(6 * ncols, 4.5 * nrows),
-            sharex=False,
-            sharey=True,
+
+        p = (
+            ggplot(df_top, aes(x="step", y="value", group="weight", color="weight"))
+            # Background lines (non-highlighted)
+            + geom_line(
+                data=df_top[~df_top["is_highlight"]],
+                alpha=0.3,
+                size=0.5,
+                color="gray",
+                show_legend=False
+            )
+            # Highlighted lines
+            + geom_line(
+                data=df_top[df_top["is_highlight"]],
+                size=1.2,
+                show_legend=False
+            )
+            # Labels at endpoints
+            + geom_text(
+                data=df_labels,
+                mapping=aes(label="short_label"),
+                ha="left",
+                size=7,
+                nudge_x=0.5,
+                show_legend=False
+            )
+            + facet_wrap("~module", ncol=ncols, scales="free_x")
+            + scale_color_brewer(type="qual", palette="Set1", guide=False)
+            + labs(
+                x="Step",
+                y="Attribution Value",
+                title=f"{str(self)} Top {len(top_500_weights)} Attributions (example 0)"
+            )
+            + theme_minimal()
+            + theme(
+                figure_size=(6 * ncols, 4.5 * nrows),
+                strip_text=element_text(size=10, weight="bold"),
+            )
         )
-
-        if hasattr(axes, "flat"):
-            axes_iter = list(axes.flat)
-        else:
-            axes_iter = [axes]
-
-        for ax, module in zip(axes_iter, module_order):
-            module_df = df_top[df_top["module"] == module].sort_values("step")
-            if module_df.empty:
-                ax.set_visible(False)
-                continue
-
-            top_lines = []
-
-            for weight, weight_df in module_df.groupby("weight"):
-                weight_df = weight_df.sort_values("step")
-                color = color_lookup.get(weight, "black")
-                is_top = weight in color_lookup
-                # Strip module prefix from label since it's in the subplot title
-                short_label = weight[len(module):] if weight.startswith(module) else weight
-                line, = ax.plot(
-                    weight_df["step"],
-                    weight_df["value"],
-                    color=color,
-                    linewidth=1.6 if is_top else 0.8,
-                    alpha=1.0 if is_top else 0.35,
-                    zorder=3 if is_top else 1,
-                    label=short_label if is_top else "_nolegend_",
-                )
-                if is_top:
-                    top_lines.append(line)
-
-            if top_lines:
-                labelLines(top_lines, align=True, fontsize=8, zorder=5)
-
-            ax.set_title(module)
-            ax.set_xlabel("Step")
-            ax.set_ylabel("Attribution Value")
-            ax.set_ylim(y_min_global, y_max_global)
-            ax.grid(True, linestyle="--", alpha=0.25)
-
-        for ax in axes_iter[len(module_order) :]:
-            ax.set_visible(False)
-            ax.set_ylim(y_min_global, y_max_global)
-
-        fig.suptitle(
-            f"{str(self)} Top {len(top_500_weights)} Attributions (example 0)",
-            fontsize=16,
-        )
-        fig.tight_layout(rect=[0, 0, 1, 0.97])
 
         os.makedirs(log_dir, exist_ok=True)
-        fig.savefig(os.path.join(log_dir, f"{str(self)}.top_attribs.png"), dpi=200)
-        plt.close(fig)
+        ggsave(p, os.path.join(log_dir, f"{str(self)}.top_attribs.png"), dpi=200)
 
         # Also plot activation gradients
         self._plot_activation_grads(log_dir)
@@ -627,43 +610,35 @@ class LCAEvaluator(Evaluator):
 
         df = pd.DataFrame(records)
 
-        # Create faceted plot with one subplot per example
+        # Assign linetypes: activation layers get solid, weight/loss get special styles
+        df["linetype"] = df["type"].map({
+            "activation": "solid",
+            "weight": "dashed",
+            "loss": "dotted"
+        })
+
+        # Create faceted plot with plotnine
         ncols = min(4, n_examples)
-        nrows = math.ceil(n_examples / ncols)
-        fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows), squeeze=False)
-        axes_flat = axes.flat
+        p = (
+            ggplot(df, aes(x="step", y="value", color="layer", linetype="linetype"))
+            + geom_line(size=0.8)
+            + facet_wrap("~example", ncol=ncols, labeller="label_both")
+            + scale_color_brewer(type="qual", palette="Set1")
+            + scale_linetype_manual(values={"solid": "solid", "dashed": "dashed", "dotted": "dotted"}, guide=False)
+            + labs(
+                x="Step",
+                y="Total Attribution / Δloss",
+                color="Layer",
+                title=f"{str(self)} Attributions vs Actual Loss Change"
+            )
+            + theme_minimal()
+            + theme(
+                figure_size=(5 * ncols, 4 * math.ceil(n_examples / ncols)),
+                legend_position="right",
+                legend_text=element_text(size=7),
+                strip_text=element_text(size=10),
+            )
+        )
 
-        for ex_idx in range(n_examples):
-            ax = axes_flat[ex_idx]
-            ex_df = df[df["example"] == ex_idx]
-
-            # Plot activation layers
-            for layer_name in layer_names:
-                layer_df = ex_df[ex_df["layer"] == layer_name].sort_values("step")
-                if not layer_df.empty:
-                    ax.plot(layer_df["step"], layer_df["value"], label=layer_name)
-
-            # Plot weight total (dashed, thicker)
-            weight_df = ex_df[ex_df["layer"] == "weights (total)"].sort_values("step")
-            if not weight_df.empty:
-                ax.plot(weight_df["step"], weight_df["value"], label="weights (total)", linestyle="--", linewidth=2, color="black")
-
-            # Plot actual loss difference (dotted, red)
-            loss_df = ex_df[ex_df["layer"] == "Δloss (actual)"].sort_values("step")
-            if not loss_df.empty:
-                ax.plot(loss_df["step"], loss_df["value"], label="Δloss (actual)", linestyle=":", linewidth=2, color="red")
-
-            ax.set_xlabel("Step")
-            ax.set_ylabel("Total Attribution / Δloss")
-            ax.set_title(f"Example {ex_idx}")
-            ax.legend(loc="best", fontsize=7)
-            ax.grid(True, linestyle="--", alpha=0.25)
-
-        # Hide unused axes
-        for ax in axes_flat[n_examples:]:
-            ax.set_visible(False)
-
-        fig.suptitle(f"{str(self)} Attributions vs Actual Loss Change", fontsize=14)
-        fig.tight_layout(rect=[0, 0, 1, 0.96])
-        fig.savefig(os.path.join(log_dir, f"{str(self)}.activation_attrib_trajectory.png"), dpi=200)
-        plt.close(fig)
+        os.makedirs(log_dir, exist_ok=True)
+        ggsave(p, os.path.join(log_dir, f"{str(self)}.activation_attrib_trajectory.png"), dpi=200)
