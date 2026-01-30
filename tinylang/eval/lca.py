@@ -422,7 +422,7 @@ class LCAEvaluator(Evaluator):
         )
 
         os.makedirs(log_dir, exist_ok=True)
-        ggsave(p, os.path.join(log_dir, f"{str(self)}.top_attribs.png"), dpi=200)
+        ggsave(p, os.path.join(log_dir, f"{str(self)}.top_attribs.png"), dpi=200, limitsize=False)
 
         # Also plot activation gradients
         self._plot_activation_grads(log_dir)
@@ -641,4 +641,4 @@ class LCAEvaluator(Evaluator):
         )
 
         os.makedirs(log_dir, exist_ok=True)
-        ggsave(p, os.path.join(log_dir, f"{str(self)}.activation_attrib_trajectory.png"), dpi=200)
+        ggsave(p, os.path.join(log_dir, f"{str(self)}.activation_attrib_trajectory.png"), dpi=200, limitsize=False)
