@@ -11,7 +11,14 @@ evaluators:
     interpolation_steps: 100
 language:
   class: AR
-  file: /nlp/scr/aryaman/tinylang/languages/ar_32.pkl
+  config:
+    mask_nonquery: true
+    max_length: 32
+    min_length: 32
+    num_kv: 1024
+    prepare_train_set: true
+    query_type: key
+  # file: /nlp/scr/aryaman/tinylang/languages/ar_32.pkl
 model:
   class: Zoology
   config:
