@@ -16,12 +16,11 @@ model:
   class: Zoology
   config:
     bias: false
-    mixer_type: mamba
+    mixer_type: attention
     n_embd: 32
     n_head: 1
     n_layer: 2
     n_positions: 1024
-    pos_emb: false
     state_mixer_type: mlp
 training:
   cosine: true
