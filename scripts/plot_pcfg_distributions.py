@@ -137,4 +137,56 @@ for q_tok, a_tok in query_answer_pairs:
         correct += 1
 print(f"Per-query majority baseline: {correct / n_samples:.3f}")
 
+# Plot 4: Distance between query_item_orig and target_item_orig
+distances = []
+answer_is_right = []
+for _ in range(10000):
+    tokens, probing_schema = lang.sample(split="train")
+    q_pos = probing_schema["queries"]["query_item_orig"]["pos"]
+    t_pos = probing_schema["queries"]["target_item_orig"]["pos"]
+    distances.append(t_pos - q_pos)
+    answer_is_right.append(t_pos > q_pos)
+
+dist_df = pd.DataFrame({"distance": distances})
+print(f"\nAnswer is to the RIGHT of query: {sum(answer_is_right)/len(answer_is_right)*100:.1f}%")
+print(f"Mean distance: {np.mean(distances):.1f}")
+print(f"Median distance: {np.median(distances):.1f}")
+
+# histogram
+plot = (
+    p9.ggplot(dist_df, p9.aes(x="distance")) +
+    p9.geom_histogram(bins=50, fill="#8da0cb") +
+    p9.geom_vline(xintercept=0, linetype="dashed", color="red") +
+    p9.labs(x="Distance (target_pos - query_pos)", y="Count", title="Query-to-answer distance") +
+    p9.theme(figure_size=(6, 3))
+)
+plot.save("scripts/figs/pcfg_distance_dist.png", dpi=300, limitsize=False)
+print("Saved pcfg_distance_dist")
+
+# What accuracy would "copy token at position query+1" get?
+copy_right_correct = 0
+for _ in range(10000):
+    tokens, probing_schema = lang.sample(split="train")
+    q_pos = probing_schema["queries"]["query_item_orig"]["pos"]
+    t_pos = probing_schema["queries"]["target_item_orig"]["pos"]
+    target_tok = int(tokens[t_pos])
+    # try copying from query+1
+    if q_pos + 1 < len(tokens):
+        if int(tokens[q_pos + 1]) == target_tok:
+            copy_right_correct += 1
+print(f"'Copy token at query+1' accuracy: {copy_right_correct/10000:.3f}")
+
+# What about "copy rightmost terminal in sequence"?
+rightmost_correct = 0
+for _ in range(10000):
+    tokens, probing_schema = lang.sample(split="train")
+    t_pos = probing_schema["queries"]["target_item_orig"]["pos"]
+    target_tok = int(tokens[t_pos])
+    # find rightmost terminal (before EOS)
+    divider_pos = probing_schema["queries"]["divider"]["pos"]
+    rightmost_tok = int(tokens[divider_pos - 1])
+    if rightmost_tok == target_tok:
+        rightmost_correct += 1
+print(f"'Copy rightmost terminal' accuracy: {rightmost_correct/10000:.3f}")
+
 print("\nDone!")
