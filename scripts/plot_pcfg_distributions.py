@@ -42,8 +42,7 @@ answer_tokens = []
 query_answer_pairs = []
 
 for _ in range(n_samples):
-    result = lang.sample(split="train", return_sentence=True)
-    tokens, probing_schema, sentence = result
+    tokens, probing_schema = lang.sample(split="train")
 
     query_pos = probing_schema["queries"]["query_item"]["pos"]
     target_pos = probing_schema["queries"]["target_item"]["pos"]
