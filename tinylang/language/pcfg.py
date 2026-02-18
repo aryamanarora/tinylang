@@ -35,12 +35,14 @@ class PCFG(Language):
         train_test_split: float=0.0,
         tts_temp: float=0.0,
         transparent_nonterminals: bool=False,
+        uninformative_nonterminals: bool=False,
         unambiguous_queries: bool=False,
         sample_first: str="target",
         prepare_train_set: bool=False,
         terminal_occurrence_factor: float | None=None, # how much to count all the terminals as
     ):
         super().__init__()
+        assert not (transparent_nonterminals and uninformative_nonterminals), "transparent_nonterminals and uninformative_nonterminals cannot both be True"
         self.TERMINAL_START = 3
         self.QUERY_START = self.TERMINAL_START + num_terminals
         if transparent_nonterminals:
@@ -143,6 +145,8 @@ class PCFG(Language):
         for nt_idx, nt in enumerate(self.nonterminals):
             if not transparent_nonterminals:
                 self.head_probs[nt] = np.random.dirichlet(np.ones(num_terminals))
+            elif uninformative_nonterminals: # all heads are equally likely, so no info
+                self.head_probs[nt] = np.ones(num_terminals) / num_terminals
             else:
                 self.head_probs[nt] = np.zeros(num_terminals + num_nonterminals)
                 self.head_probs[nt][num_terminals + nt_idx] = 1
