@@ -189,4 +189,54 @@ for _ in range(10000):
         rightmost_correct += 1
 print(f"'Copy rightmost terminal' accuracy: {rightmost_correct/10000:.3f}")
 
+# What about bigram statistics? P(next_token | token) from the tree yield
+# If the query token is X, and in tree yields X is typically followed by Y,
+# then predicting Y gets you accuracy without needing to locate X.
+bigram_counts = Counter()  # (token, next_token) -> count
+token_counts = Counter()   # token -> count as non-final position
+for _ in range(10000):
+    tokens, probing_schema = lang.sample(split="train")
+    divider_pos = probing_schema["queries"]["divider"]["pos"]
+    # tree yield is tokens[1:divider_pos] (skip BOS, stop before EOS)
+    yield_tokens = [int(tokens[i]) for i in range(1, divider_pos)]
+    for i in range(len(yield_tokens) - 1):
+        bigram_counts[(yield_tokens[i], yield_tokens[i+1])] += 1
+        token_counts[yield_tokens[i]] += 1
+
+# For each token, what's the most likely next token?
+best_next = {}
+for tok in token_counts:
+    candidates = {next_tok: bigram_counts[(tok, next_tok)] for next_tok in range(lang.vocab_size) if (tok, next_tok) in bigram_counts}
+    if candidates:
+        best_next[tok] = max(candidates, key=candidates.get)
+
+# Now test: if model just predicts best_next[query_token], what accuracy?
+bigram_correct = 0
+bigram_total = 0
+for _ in range(10000):
+    tokens, probing_schema = lang.sample(split="train")
+    q_pos = probing_schema["queries"]["query_item"]["pos"]
+    t_pos = probing_schema["queries"]["target_item"]["pos"]
+    query_tok = int(tokens[q_pos])
+    target_tok = int(tokens[t_pos])
+    if query_tok in best_next:
+        if best_next[query_tok] == target_tok:
+            bigram_correct += 1
+    bigram_total += 1
+print(f"Bigram heuristic (predict most common next token for query type): {bigram_correct/bigram_total:.3f}")
+
+# Also: full conditional P(answer | query, using bigram)
+# i.e., predict with the full bigram distribution, what's the expected accuracy?
+bigram_prob_correct = 0
+for _ in range(10000):
+    tokens, probing_schema = lang.sample(split="train")
+    q_pos = probing_schema["queries"]["query_item"]["pos"]
+    t_pos = probing_schema["queries"]["target_item"]["pos"]
+    query_tok = int(tokens[q_pos])
+    target_tok = int(tokens[t_pos])
+    if query_tok in token_counts:
+        prob = bigram_counts.get((query_tok, target_tok), 0) / token_counts[query_tok]
+        bigram_prob_correct += prob
+print(f"Bigram expected accuracy (P(answer|query) from bigram): {bigram_prob_correct/10000:.3f}")
+
 print("\nDone!")
