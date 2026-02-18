@@ -42,7 +42,7 @@ class PCFG(Language):
         terminal_occurrence_factor: float | None=None, # how much to count all the terminals as
     ):
         super().__init__()
-        assert not (transparent_nonterminals and uninformative_nonterminals), "transparent_nonterminals and uninformative_nonterminals cannot both be True"
+        assert not (transparent_nonterminals and uninformative_nonterminals), "transparent_nonterminals and uninformative_nonterminals are mutually exclusive"
         self.TERMINAL_START = 3
         self.QUERY_START = self.TERMINAL_START + num_terminals
         if transparent_nonterminals:
@@ -143,10 +143,10 @@ class PCFG(Language):
         # each nt has a distribution over terminals as its "head". this makes the PCFG transparent?
         self.head_probs = {}
         for nt_idx, nt in enumerate(self.nonterminals):
-            if not transparent_nonterminals:
-                self.head_probs[nt] = np.random.dirichlet(np.ones(num_terminals))
-            elif uninformative_nonterminals: # all heads are equally likely, so no info
+            if uninformative_nonterminals:
                 self.head_probs[nt] = np.ones(num_terminals) / num_terminals
+            elif not transparent_nonterminals:
+                self.head_probs[nt] = np.random.dirichlet(np.ones(num_terminals))
             else:
                 self.head_probs[nt] = np.zeros(num_terminals + num_nonterminals)
                 self.head_probs[nt][num_terminals + nt_idx] = 1
