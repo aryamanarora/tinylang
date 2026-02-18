@@ -20,8 +20,10 @@ p9.theme_set(
 )
 
 configs = {
-    "rhs=5": dict(max_rhs_len=5),
-    "rhs=10": dict(max_rhs_len=10),
+    "rhs=5, T=20": dict(max_rhs_len=5, num_terminals=20),
+    "rhs=10, T=20": dict(max_rhs_len=10, num_terminals=20),
+    "rhs=5, T=8192": dict(max_rhs_len=5, num_terminals=8192),
+    "rhs=10, T=8192": dict(max_rhs_len=10, num_terminals=8192),
 }
 
 all_rows = []
@@ -65,6 +67,10 @@ for config_name, overrides in configs.items():
     print(f"  Fraction at rightmost: {(sub_df['ans_pos'] == sub_df['yield_len'] - 1).mean():.3f}")
     print(f"  Fraction in last 10%: {(sub_df['ans_rel'] >= 0.9).mean():.3f}")
     print(f"  Mean yield length: {sub_df['yield_len'].mean():.1f}")
+    print(f"  'Copy rightmost' accuracy: {1/kwargs['num_terminals'] * (sub_df['ans_pos'] == sub_df['yield_len'] - 1).mean() + (1 - (sub_df['ans_pos'] == sub_df['yield_len'] - 1).mean()) * 1/kwargs['num_terminals']:.3f}")
+    # Actually: copy rightmost gets it right when answer IS rightmost, wrong otherwise
+    rightmost_acc = (sub_df['ans_pos'] == sub_df['yield_len'] - 1).mean()
+    print(f"  'Copy rightmost' accuracy (exact): {rightmost_acc:.3f}")
 
 df = pd.DataFrame(all_rows)
 os.makedirs("scripts/figs", exist_ok=True)
@@ -75,7 +81,7 @@ plot = (
     p9.geom_histogram(bins=30, alpha=0.7, position="dodge") +
     p9.labs(x="Relative answer position (0=left, 1=right)", y="Count",
             title="Answer position distribution", fill="Config") +
-    p9.theme(figure_size=(6, 3))
+    p9.theme(figure_size=(8, 4))
 )
 plot.save("scripts/figs/pcfg_anspos_hist_compare.png", dpi=300, limitsize=False)
 print("\nSaved pcfg_anspos_hist_compare")
@@ -86,10 +92,10 @@ plot = (
     p9.ggplot(heatmap_df, p9.aes(x="ans_pos", y="yield_len", fill="count")) +
     p9.geom_tile() +
     p9.scale_fill_cmap("viridis") +
-    p9.facet_wrap("~config", nrow=1) +
+    p9.facet_wrap("~config", nrow=2) +
     p9.labs(x="Answer position in yield (0-indexed)", y="Yield length", fill="Count",
             title="Yield length vs answer position") +
-    p9.theme(figure_size=(12, 5))
+    p9.theme(figure_size=(12, 10))
 )
 plot.save("scripts/figs/pcfg_length_vs_anspos_compare.png", dpi=300, limitsize=False)
 print("Saved pcfg_length_vs_anspos_compare")
