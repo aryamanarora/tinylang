@@ -22,8 +22,8 @@ p9.theme_set(
 configs = {
     "rhs=5, T=20": dict(max_rhs_len=5, num_terminals=20),
     "rhs=10, T=20": dict(max_rhs_len=10, num_terminals=20),
-    "rhs=5, T=8192": dict(max_rhs_len=5, num_terminals=8192),
-    "rhs=10, T=8192": dict(max_rhs_len=10, num_terminals=8192),
+    "rhs=5, T=8192": dict(max_rhs_len=5, num_terminals=8192, terminal_occurrence_factor=20.0),
+    "rhs=10, T=8192": dict(max_rhs_len=10, num_terminals=8192, terminal_occurrence_factor=20.0),
 }
 
 all_rows = []
