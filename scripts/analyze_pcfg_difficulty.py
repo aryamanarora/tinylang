@@ -56,6 +56,7 @@ dirs = [
     "experiments/logs/pcfg_easy_1L/attention**/test/SummaryEvaluator.csv",
     "experiments/logs/pcfg_vary_difficulty_random_5_20/attention**/test/SummaryEvaluator.csv",
     "experiments/logs/pcfg_vary_difficulty_random_5_20_1L/attention**/test/SummaryEvaluator.csv",
+    "experiments/logs/pcfg_vary_difficulty_random_5_20_3L/attention**/test/SummaryEvaluator.csv",
 ]
 df = read_df(dirs)
 
@@ -64,6 +65,7 @@ dataset_map = {
     "pcfg_easy_1L": "Informative NT, 1L",
     "pcfg_vary_difficulty_random_5_20": "Uninformative NT, 2L",
     "pcfg_vary_difficulty_random_5_20_1L": "Uninformative NT, 1L",
+    "pcfg_vary_difficulty_random_5_20_3L": "Uninformative NT, 3L",
 }
 
 # Final accuracy: best LR per (dim, dataset)
@@ -98,7 +100,7 @@ subset_df_temp["dim"] = pd.Categorical(subset_df_temp["dim"])
 subset_df_temp["value"] *= 100
 subset_df_temp["dataset"] = pd.Categorical(
     subset_df_temp["dataset"],
-    categories=["Informative NT, 2L", "Informative NT, 1L", "Uninformative NT, 2L", "Uninformative NT, 1L"],
+    categories=["Informative NT, 2L", "Informative NT, 1L", "Uninformative NT, 3L", "Uninformative NT, 2L", "Uninformative NT, 1L"],
     ordered=True,
 )
 plot = (
@@ -200,6 +202,7 @@ int_dirs = [
     "experiments/logs/pcfg_easy_1L/attention**/test/InterchangeEvaluator.csv",
     "experiments/logs/pcfg_vary_difficulty_random_5_20/attention**/test/InterchangeEvaluator.csv",
     "experiments/logs/pcfg_vary_difficulty_random_5_20_1L/attention**/test/InterchangeEvaluator.csv",
+    "experiments/logs/pcfg_vary_difficulty_random_5_20_3L/attention**/test/InterchangeEvaluator.csv",
 ]
 df_int = read_df(int_dirs)
 
@@ -211,7 +214,7 @@ df_summary = df.copy()
 # Process them separately and combine
 results = []
 for ds_key, ds_label in dataset_map.items():
-    n_layers = 1 if "1L" in ds_label else 2
+    n_layers = 1 if "1L" in ds_label else 3 if "3L" in ds_label else 2
     df_sub = df_summary[df_summary["dataset"] == ds_key]
     df_int_sub = df_int[df_int["dataset"] == ds_key]
     if len(df_int_sub) == 0:
@@ -290,7 +293,7 @@ subset_df_temp["metric"] = pd.Categorical(
 subset_df_temp["dim"] = pd.Categorical(subset_df_temp["dim"])
 subset_df_temp["dataset"] = pd.Categorical(
     subset_df_temp["dataset"],
-    categories=["Informative NT, 2L", "Informative NT, 1L", "Uninformative NT, 2L", "Uninformative NT, 1L"],
+    categories=["Informative NT, 2L", "Informative NT, 1L", "Uninformative NT, 3L", "Uninformative NT, 2L", "Uninformative NT, 1L"],
     ordered=True,
 )
 subset_df_temp["alpha"] = subset_df_temp.apply(lambda x: max(0, (x["value"] - 0.5)) / (1 - 0.5) if x["value"] > 0.5 else 0, axis=1)
@@ -341,7 +344,7 @@ if assoc_cols:
     subset_df_int_plot["variable"] = subset_df_int_plot["variable"].map(assoc_mapping)
     subset_df_int_plot["dataset"] = pd.Categorical(
         subset_df_int_plot["dataset"],
-        categories=["Informative NT, 2L", "Informative NT, 1L", "Uninformative NT, 2L", "Uninformative NT, 1L"],
+        categories=["Informative NT, 2L", "Informative NT, 1L", "Uninformative NT, 3L", "Uninformative NT, 2L", "Uninformative NT, 1L"],
         ordered=True,
     )
 
